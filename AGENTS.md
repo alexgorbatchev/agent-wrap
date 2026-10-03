@@ -14,9 +14,10 @@ Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harness
 
 ## Commands
 
-- Development prerequisites: Go 1.27.1, Zig 0.16.0, `just`, `pkg-config`, `curl`, `tar`, and `shasum`. The native recipe builds the exact Ghostty source and checksum required by the pinned `go-tui-frame` module under this package's `.tmp/native/`; Linux builds use Zig's musl target and static linkage.
+- Development prerequisites: Go 1.27.1, Zig 0.16.0, Git, `just`, `pkg-config`, `curl`, `tar`, and `shasum`. The native recipe builds the exact Ghostty source and checksum required by the pinned `go-tui-frame` module under the main checkout's `.tmp/native/`; Linux builds use Zig's musl target and static linkage.
 - Lint requires `golangci-lint` built with Go 1.27 or newer (verified with v2.14.0); an older build cannot analyze the workspace toolchain.
-- Native and Go build caches live under `.tmp/`; the project-local Go cache keeps compiler artifacts separate from other checkouts.
+- Always reuse the main checkout's `.tmp/native/` for static dependencies, including Ghostty sources, archives, installation prefixes, and Zig caches, from every linked worktree. Resolve the main checkout through Git worktree metadata rather than the current branch name.
+- Go build caches and temporary files stay in each checkout's `.tmp/`; binaries stay in each checkout's `bin/`.
 - The project owns a Go 1.27.1 workspace because the frame requires it; run commands with `just` at the project root.
 - Supported runtime platforms: Linux and macOS; builds and PTY integration tests are verified on the host platform. Windows is unsupported by the terminal-frame dependency.
 
