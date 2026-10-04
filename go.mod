@@ -6,7 +6,7 @@ require (
 	github.com/alexgorbatchev/agent-parser v1.0.0
 	github.com/alexgorbatchev/agent-watcher v1.0.1
 	github.com/alexgorbatchev/cobra-help-tree/v2 v2.1.0
-	github.com/alexgorbatchev/go-tui-frame v0.0.0-20261003042459-6dcdfea4388b
+	github.com/alexgorbatchev/go-tui-frame v1.0.0
 	github.com/charmbracelet/ultraviolet v0.0.0-20260811164956-006e29f97886
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/creack/pty v1.1.24
