@@ -147,6 +147,22 @@ func TestReadGitCancellation(t *testing.T) {
 	}
 }
 
+func TestResolveDetachedCommitFailure(t *testing.T) {
+	dir := repo(t, "main")
+	git(t, dir, "checkout", "--detach")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "packed-refs"), []byte("invalid\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Resolve(context.Background(), dir, "")
+	if err == nil || !strings.Contains(err.Error(), "git rev-parse --short HEAD") || !strings.Contains(err.Error(), "unexpected line in .git/packed-refs: invalid") {
+		t.Fatalf("detached commit failure lost command or diagnostic: %v", err)
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 128 || !strings.Contains(string(exitErr.Stderr), "unexpected line") {
+		t.Fatalf("detached commit failure lost its exit cause: %v", err)
+	}
+}
+
 func TestResolveContexts(t *testing.T) {
 	dir := repo(t, "trunk")
 	ctx := context.Background()
