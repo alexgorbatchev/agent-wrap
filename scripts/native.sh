@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+source "$script_root/native-git.sh"
 
 # These pins are the build contract of the go-tui-frame revision in go.mod.
 revision='33da6848d63b3bba2b4f31ab1531d618f2795192'
@@ -27,8 +29,5 @@ else
     trap - EXIT
 fi
 cd "$source"
-# Explicit repository selection disables upward discovery for this archive,
-# including source paths containing Git ceiling-list separators such as ':'.
-unset GIT_WORK_TREE GIT_COMMON_DIR
-GIT_DIR="$PWD/.git" zig build -Demit-lib-vt -Demit-xcframework=false -Doptimize=ReleaseFast -Dtarget="$target" --prefix "$prefix" --cache-dir "$root/cache-$target" --global-cache-dir "$root/zig-global-cache"
+with_archive_git zig build -Demit-lib-vt -Demit-xcframework=false -Doptimize=ReleaseFast -Dtarget="$target" --prefix "$prefix" --cache-dir "$root/cache-$target" --global-cache-dir "$root/zig-global-cache"
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --static --libs --cflags libghostty-vt-static
