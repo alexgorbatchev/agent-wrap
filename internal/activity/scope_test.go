@@ -8,7 +8,30 @@ import (
 	"testing"
 
 	watcher "github.com/alexgorbatchev/agent-watcher"
+	"golang.org/x/sys/unix"
 )
+
+func TestOwnedPID(t *testing.T) {
+	session, err := unix.Getsid(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		pid  int
+		want bool
+	}{
+		{"member of the session", os.Getpid(), true},
+		// getsid(0) reports the caller's session; PID 0 is not a member of it.
+		{"pid zero", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := OwnedPID(tc.pid, session); got != tc.want {
+				t.Fatalf("OwnedPID(%d, %d) = %v, want %v", tc.pid, session, got, tc.want)
+			}
+		})
+	}
+}
 
 func TestScopedProcessDiscovery(t *testing.T) {
 	cmd := exec.Command("sleep", "30")
