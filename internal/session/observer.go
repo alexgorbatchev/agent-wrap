@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 
 	watcher "github.com/alexgorbatchev/agent-watcher"
@@ -12,13 +13,14 @@ import (
 )
 
 type observer struct {
-	mu      sync.Mutex
-	leader  int
-	since   int64
-	tracker *tracker
-	app     *frame.Frame[payload]
-	name    string
-	logger  *slog.Logger
+	mu        sync.Mutex
+	leader    int
+	since     int64
+	tracker   *tracker
+	app       *frame.Frame[payload]
+	name      string
+	logger    *slog.Logger
+	delivered *payload
 }
 
 // Handle serializes state transitions and drawing across concurrent transcripts.
@@ -38,8 +40,18 @@ func (o *observer) handle(ctx context.Context, e watcher.Event, ack func()) (err
 		o.logger.Warn("context_resolution_failed", "err", updateErr)
 		return nil
 	}
-	if err := o.app.InvalidateHeader(payload{State: next, Name: o.name}); err != nil && !errors.Is(err, frame.ErrSessionClosed) {
-		return err
+	p := payload{State: next, Name: o.name}
+	// The tracker advances even when delivery fails; compare with the last
+	// accepted payload so redelivery still publishes that context change.
+	if o.delivered != nil && p.Name == o.delivered.Name && p.State.Current == o.delivered.State.Current && slices.Equal(p.State.Trail, o.delivered.State.Trail) {
+		return nil
 	}
+	if err := o.app.InvalidateHeader(p); err != nil {
+		if !errors.Is(err, frame.ErrSessionClosed) {
+			return err
+		}
+		return nil
+	}
+	o.delivered = &p
 	return nil
 }

@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-05 11:47
+  last_modified: 2026-11-16 16:36
   status: current
 ---
 
@@ -40,6 +40,10 @@ receive the header colors across the whole grapheme.
 Colors follow reported task directories, explicit tool workdir/cwd fields,
 and file/search targets. Relative targets resolve against reported session
 context. The launch directory supplies initial context while waiting for activity.
+The first accepted header update from owned activity at or after launch clears
+the waiting label.
+Header updates submit only payloads that differ from the last accepted update;
+failed deliveries remain eligible for retry, including later context changes.
 Colors share normalized origin identity across SSH/HTTPS clones. Projects
 without origin use local directory identity. Subtrees, non-default branches,
 and worktrees have distinct context colors; a known default branch at the
