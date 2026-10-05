@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -63,12 +65,21 @@ func TestSignalSubprocessHelper(t *testing.T) {
 }
 
 func TestSignalsShutDownOwnedSession(t *testing.T) {
-	for _, sig := range []syscall.Signal{syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM} {
-		t.Run(sig.String(), func(t *testing.T) { testSignalShutdown(t, sig) })
+	for _, tc := range []struct {
+		name       string
+		signal     syscall.Signal
+		disconnect bool
+	}{
+		{"hangup", syscall.SIGHUP, false},
+		{"interrupt", syscall.SIGINT, false},
+		{"terminate", syscall.SIGTERM, false},
+		{"terminal closed", syscall.SIGHUP, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testSignalShutdown(t, tc.signal, tc.disconnect) })
 	}
 }
 
-func testSignalShutdown(t *testing.T, sig syscall.Signal) {
+func testSignalShutdown(t *testing.T, sig syscall.Signal, disconnect bool) {
 	t.Helper()
 	dir := t.TempDir()
 	cache := filepath.Join(dir, "cache")
@@ -110,7 +121,7 @@ func testSignalShutdown(t *testing.T, sig syscall.Signal) {
 			}
 		}
 	})
-	drainSignalTerminal(t, master)
+	closeTerminal := drainSignalTerminal(t, master)
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		data, err := os.ReadFile(pidPath)
@@ -136,7 +147,11 @@ func testSignalShutdown(t *testing.T, sig syscall.Signal) {
 	if err != nil || len(entries) != 1 || !entries[0].IsDir() {
 		t.Fatalf("live session cache=%v: %v", entries, err)
 	}
-	if err := cmd.Process.Signal(sig); err != nil {
+	if disconnect {
+		// Closing the controlling terminal generates the real kernel SIGHUP
+		// and makes terminal restoration fail; cleanup must still finish.
+		closeTerminal()
+	} else if err := cmd.Process.Signal(sig); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -147,6 +162,9 @@ func testSignalShutdown(t *testing.T, sig syscall.Signal) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("wrapper did not exit after signal")
+	}
+	if disconnect && !strings.Contains(diagnostic.String(), "restore termios") {
+		t.Errorf("missing terminal restoration error: %q", diagnostic.String())
 	}
 	entries, err = os.ReadDir(filepath.Join(cache, "agent-wrap"))
 	if err != nil || len(entries) != 0 {
@@ -159,8 +177,11 @@ func testSignalShutdown(t *testing.T, sig syscall.Signal) {
 	}
 }
 
-func drainSignalTerminal(t *testing.T, master *os.File) {
+func drainSignalTerminal(t *testing.T, master *os.File) func() {
 	t.Helper()
+	if err := unix.SetNonblock(int(master.Fd()), true); err != nil {
+		t.Fatal(err)
+	}
 	em, err := ghostty.NewTerminal(ghostty.WithSize(80, 24), ghostty.WithWritePty(func(_ *ghostty.Terminal, data []byte) {
 		if _, err := master.Write(data); err != nil && !errors.Is(err, syscall.EIO) && !errors.Is(err, os.ErrClosed) {
 			t.Error(err)
@@ -169,13 +190,35 @@ func drainSignalTerminal(t *testing.T, master *os.File) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan struct{})
+	done, stop := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(done)
 		buf := make([]byte, 65536)
 		for {
-			n, err := master.Read(buf)
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
+			if _, err := unix.Poll(fds, 20); err != nil {
+				if errors.Is(err, unix.EINTR) {
+					continue
+				}
+				t.Error(err)
+				return
+			}
+			if fds[0].Revents&unix.POLLIN == 0 {
+				if fds[0].Revents&unix.POLLHUP != 0 {
+					return
+				}
+				continue
+			}
+			n, err := unix.Read(int(master.Fd()), buf)
 			if err != nil {
+				if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EINTR) {
+					continue
+				}
 				if !errors.Is(err, syscall.EIO) && !errors.Is(err, os.ErrClosed) {
 					t.Error(err)
 				}
@@ -187,11 +230,17 @@ func drainSignalTerminal(t *testing.T, master *os.File) {
 			}
 		}
 	}()
-	t.Cleanup(func() {
-		if err := master.Close(); err != nil {
-			t.Error(err)
-		}
-		<-done
-		em.Close()
-	})
+	var once sync.Once
+	closeTerminal := func() {
+		once.Do(func() {
+			close(stop)
+			<-done
+			if err := master.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+				t.Error(err)
+			}
+			em.Close()
+		})
+	}
+	t.Cleanup(closeTerminal)
+	return closeTerminal
 }
