@@ -49,7 +49,10 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 		if ctx.Err() != nil {
 			return Context{}, ctx.Err()
 		}
-		return c, nil
+		if outsideRepository(err) {
+			return c, nil
+		}
+		return Context{}, fmt.Errorf("read Git root: %w", err)
 	}
 	c.Root = root
 	c.Name = filepath.Base(root)
@@ -73,12 +76,17 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 			return Context{}, err
 		}
 		c.Name = strings.TrimSuffix(filepath.Base(c.Identity), ".git")
+	} else if !gitFailure(remoteErr, 2, "error: No such remote 'origin'") {
+		return Context{}, fmt.Errorf("read Git remote: %w", remoteErr)
 	}
 	c.Branch, err = readGit(ctx, abs, "symbolic-ref", "--quiet", "--short", "HEAD")
 	if err != nil {
+		if !gitFailure(err, 1, "") {
+			return Context{}, fmt.Errorf("read Git branch: %w", err)
+		}
 		commit, commitErr := readGit(ctx, abs, "rev-parse", "--short", "HEAD")
 		if commitErr != nil {
-			return Context{}, fmt.Errorf("read Git branch: %w", err)
+			return Context{}, fmt.Errorf("read Git branch: %w", commitErr)
 		}
 		c.Branch = "detached:" + commit
 	}
@@ -86,6 +94,8 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 	ref, refErr := readGit(ctx, abs, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
 	if refErr == nil {
 		c.DefaultBranch = strings.TrimPrefix(ref, "refs/remotes/origin/")
+	} else if !gitFailure(refErr, 1, "") {
+		return Context{}, fmt.Errorf("read Git default branch: %w", refErr)
 	}
 	sub, err := filepath.Rel(root, abs)
 	if err != nil {
@@ -103,9 +113,50 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 func readGit(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
+	// Classification of expected Git failures requires stable diagnostic text.
+	cmd.Env = append(cmd.Environ(), "LC_ALL=C", "LANGUAGE=C")
 	out, err := cmd.Output()
-	return strings.TrimSpace(string(out)), err
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), ctx.Err())
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			if diagnostic := strings.TrimSpace(string(exitErr.Stderr)); diagnostic != "" {
+				return "", fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), diagnostic, err)
+			}
+		}
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
+
+func gitFailure(err error, code int, diagnostic string) bool {
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == code && strings.TrimSpace(string(exitErr.Stderr)) == diagnostic
+}
+
+func outsideRepository(err error) bool {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 128 {
+		return false
+	}
+	diagnostic := strings.TrimSpace(string(exitErr.Stderr))
+	return diagnostic == "fatal: not a git repository (or any of the parent directories): .git" ||
+		strings.HasPrefix(diagnostic, "fatal: not a git repository (or any parent up to mount point ")
+}
+
+type remoteIdentityError struct {
+	err error
+}
+
+func (e remoteIdentityError) Error() string {
+	// url.Parse wraps its cause in url.Error, whose display includes the raw
+	// remote URL. Keep that original error inspectable without displaying secrets.
+	return fmt.Sprintf("invalid Git remote identity: %v", errors.Unwrap(e.err))
+}
+
+func (e remoteIdentityError) Unwrap() error { return e.err }
 
 func normalizeRemote(raw, root string) (string, error) {
 	raw = strings.TrimSpace(raw)
@@ -126,7 +177,7 @@ func normalizeRemote(raw, root string) (string, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("invalid Git remote identity")
+		return "", remoteIdentityError{err: err}
 	}
 	if u.Scheme == "file" {
 		return "directory:" + filepath.Clean(u.Path), nil

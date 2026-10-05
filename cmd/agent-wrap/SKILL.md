@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-03 11:40
+  last_modified: 2026-10-05 11:08
   status: current
 ---
 
@@ -62,6 +62,12 @@ go to the wrapper log. No telemetry server or network calls are required by
 the wrapper; the launched agent retains its own normal behavior.
 
 Use Git installed on PATH for repository metadata. Harness storage is read-only.
+Directories outside Git use directory identity. Git failures include the command
+and Git's diagnostic in English. A repository Git refuses to open fails wrapper
+startup with that diagnostic; errors during activity go to the wrapper log and
+preserve the last valid header context. Missing origin and local origin/HEAD
+metadata retain their directory-identity and default-branch fallbacks.
+Malformed remote errors report parse details without displaying the raw URL.
 Concurrent wrappers use separate temporary watcher state below
 ${XDG_CACHE_HOME:-the OS user cache}/agent-wrap/session-*, removed on shutdown.
 Logs rotate at 10 MB, retain five backups for 14 days, and compress rotations.

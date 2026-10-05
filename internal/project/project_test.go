@@ -2,9 +2,12 @@ package project
 
 import (
 	"context"
+	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -54,6 +57,93 @@ func TestRemoteIdentity(t *testing.T) {
 	}
 	if _, err := normalizeRemote("https://[bad", "/work"); err == nil {
 		t.Fatal("accepted malformed remote")
+	} else {
+		var parseErr *url.Error
+		if !errors.As(err, &parseErr) {
+			t.Fatalf("malformed remote lost URL parse cause: %v", err)
+		}
+	}
+}
+
+func TestResolveGitFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		prepare func(*testing.T, string)
+		want    string
+	}{
+		{"dubious ownership", func(t *testing.T, _ string) {
+			t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+			t.Setenv("GIT_CONFIG_COUNT", "1")
+			t.Setenv("GIT_CONFIG_KEY_0", "safe.directory")
+			t.Setenv("GIT_CONFIG_VALUE_0", "")
+		}, "dubious ownership"},
+		{"invalid config", func(t *testing.T, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[invalid\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}, "bad config line"},
+		{"explicit invalid git directory", func(t *testing.T, dir string) {
+			t.Setenv("GIT_DIR", filepath.Join(dir, "missing"))
+		}, "not a git repository:"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := repo(t, "main")
+			tc.prepare(t, dir)
+			_, err := Resolve(context.Background(), dir, "")
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "git rev-parse --show-toplevel") {
+				t.Fatalf("Git failure lost command or diagnostic: %v", err)
+			}
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 128 {
+				t.Fatalf("Git failure lost exit cause: %v", err)
+			}
+		})
+	}
+}
+
+func TestMalformedRemoteDiagnostic(t *testing.T) {
+	raw := "https://user:password-secret@[bad/repo?token=query-secret"
+	_, err := normalizeRemote(raw, "/work")
+	var parseErr *url.Error
+	if !errors.As(err, &parseErr) || errors.Unwrap(err) != parseErr || parseErr.URL != raw || parseErr.Op != "parse" || parseErr.Err.Error() != "missing ']' in host" {
+		t.Fatalf("malformed remote lost original parse cause: %v", err)
+	}
+	if !strings.Contains(err.Error(), parseErr.Err.Error()) || strings.Contains(err.Error(), "password-secret") || strings.Contains(err.Error(), "query-secret") {
+		t.Fatalf("malformed remote diagnostic exposes raw URL or omits parse details: %v", err)
+	}
+}
+
+func TestReadGitErrors(t *testing.T) {
+	dir := repo(t, "main")
+	t.Setenv("LC_ALL", "fr_FR.UTF-8")
+	t.Setenv("LANGUAGE", "fr")
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"stderr", []string{"rev-parse", "--verify", "missing-ref"}, "Needed a single revision"},
+		{"silent", []string{"symbolic-ref", "--quiet", "refs/remotes/missing/HEAD"}, "exit status 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readGit(context.Background(), dir, tc.args...)
+			if err == nil || !strings.Contains(err.Error(), "git "+strings.Join(tc.args, " ")) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Git failure lost command or diagnostic: %v", err)
+			}
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
+				t.Fatalf("Git failure lost exit cause: %v", err)
+			}
+		})
+	}
+}
+
+func TestReadGitCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := readGit(ctx, t.TempDir(), "rev-parse", "--show-toplevel")
+	if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "git rev-parse --show-toplevel") {
+		t.Fatalf("Git cancellation lost command or cause: %v", err)
 	}
 }
 
