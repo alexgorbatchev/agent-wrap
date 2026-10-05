@@ -8,8 +8,88 @@ import (
 
 	"github.com/alexgorbatchev/agent-wrap/internal/project"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/lucasb-eyer/go-colorful"
 )
+
+func TestDrawGraphemes(t *testing.T) {
+	current := projectContext("日本語")
+	current.Branch = "機能🤖"
+	current.DefaultBranch = current.Branch
+	split := current
+	split.Branch = "分岐👩‍💻"
+	for _, tt := range []struct {
+		name  string
+		state State
+		pins  []color.RGBA
+	}{
+		{"primary", New(current), nil},
+		{"history", New(projectContext("old")).Move(current), []color.RGBA{bright("old")}},
+		{"split", New(split), []color.RGBA{bright(current.Identity)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			view := uv.NewScreenBuffer(80, Rows)
+			view.Method = ansi.GraphemeWidth
+			Draw(view, tt.state, "Claude 🤖 Code é")
+			start := len(tt.pins) * pinWidth
+			wantRows := []string{"Claude 🤖 Code é", "日本語 · /work/日本語", tt.state.Current.Branch}
+			for y, want := range wantRows {
+				var row strings.Builder
+				for x := 0; x < view.Width(); {
+					cell := view.CellAt(x, y)
+					wantBG := background(tt.state.Current)
+					if x < start {
+						wantBG = tt.pins[x/pinWidth]
+					}
+					if cell.Style.Fg != color.Black || cell.Style.Bg != color.Color(wantBG) {
+						t.Errorf("(%d,%d) style = %+v; want black on %+v", x, y, cell.Style, wantBG)
+					}
+					if cell.Width < 1 {
+						t.Errorf("(%d,%d) is an unexpected placeholder", x, y)
+					}
+					for j := 1; j < cell.Width; j++ {
+						if placeholder := view.CellAt(x+j, y); !placeholder.IsZero() {
+							t.Errorf("(%d,%d) continuation = %+v; want zero placeholder", x+j, y, placeholder)
+						}
+					}
+					row.WriteString(cell.Content)
+					x += max(1, cell.Width)
+				}
+				want = strings.Repeat(" ", start+1) + want
+				if got := strings.TrimRight(row.String(), " "); got != want {
+					t.Errorf("row %d = %q; want %q", y, got, want)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkDraw(b *testing.B) {
+	state := New(projectContext("A")).Move(projectContext("日本語"))
+	view := uv.NewScreenBuffer(200, Rows)
+	view.Method = ansi.GraphemeWidth
+	b.ReportAllocs()
+	for b.Loop() {
+		view.Clear()
+		Draw(view, state, "Claude 🤖 Code")
+	}
+}
+
+func TestDrawAllocationsDoNotScaleWithColumns(t *testing.T) {
+	state := New(projectContext("A")).Move(projectContext("日本語"))
+	allocations := func(width int) float64 {
+		view := uv.NewScreenBuffer(width, Rows)
+		view.Method = ansi.GraphemeWidth
+		return testing.AllocsPerRun(1000, func() {
+			view.Clear()
+			Draw(view, state, "Claude 🤖 Code")
+		})
+	}
+	narrow, wide := allocations(40), allocations(200)
+	if wide > narrow+1 {
+		t.Fatalf("Draw allocations scale with columns: 40 = %.0f, 200 = %.0f", narrow, wide)
+	}
+}
 
 func TestRenderedBlockSeparation(t *testing.T) {
 	for i := range 360 {

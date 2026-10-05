@@ -91,8 +91,8 @@ func Draw(view uv.Screen, s State, name string) {
 	if b.Empty() {
 		return
 	}
-	bg := background(s.Current)
-	pins := make([]color.RGBA, 0, len(s.Trail))
+	var bg color.Color = background(s.Current)
+	pins := make([]color.Color, 0, len(s.Trail))
 	for _, p := range s.Trail[:max(0, len(s.Trail)-1)] {
 		pins = append(pins, bright(p.Identity))
 	}
@@ -115,15 +115,19 @@ func Draw(view uv.Screen, s State, name string) {
 	}
 	text := safeText(name) + "\n" + safeText(s.Current.Name+" · "+s.Current.Dir) + "\n" + safeText(branch)
 	uv.NewStyledString(text).Draw(view, uv.Rect(start+1, b.Min.Y, max(0, b.Max.X-start-1), min(Rows, b.Dy())))
+	var c uv.Cell
 	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			c := *view.CellAt(x, y)
+		for x := b.Min.X; x < b.Max.X; {
+			c = *view.CellAt(x, y)
 			c.Style.Fg = color.Black
 			c.Style.Bg = bg
 			if x < start {
 				c.Style.Bg = pins[(x-b.Min.X)/pinWidth]
 			}
 			view.SetCell(x, y, &c)
+			// SetCell copies the glyph and recreates its continuation placeholders.
+			// Writing to a placeholder would erase the wide glyph it belongs to.
+			x += max(1, c.Width)
 		}
 	}
 }

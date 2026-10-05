@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-05 11:39
+  last_modified: 2026-10-05 11:46
   status: current
 ---
 
@@ -35,6 +35,8 @@ interpreter launch commands. Run without arguments to print help.
 | `--version` | `-v` | `bool` | `false` | Print the raw build version and newline. |
 
 Read the header rows as agent label, project/path, and branch/worktree.
+Wide graphemes, including CJK and emoji, keep their terminal cell widths and
+receive the header colors across the whole grapheme.
 Colors follow reported task directories, explicit tool workdir/cwd fields,
 and file/search targets. Relative targets resolve against reported session
 context. The launch directory supplies initial context while waiting for activity.
