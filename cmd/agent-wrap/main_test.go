@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"syscall"
@@ -111,7 +112,7 @@ func TestCommandPreservesChildExitInTerminal(t *testing.T) {
 	}
 	previousInput, previousOutput := os.Stdin, os.Stdout
 	os.Stdin, os.Stdout = slave, slave
-	drained := make(chan struct{})
+	drained, closing := make(chan struct{}), make(chan struct{})
 	emulator, err := ghostty.NewTerminal(ghostty.WithSize(80, 24), ghostty.WithWritePty(func(_ *ghostty.Terminal, data []byte) {
 		if _, err := master.Write(data); err != nil {
 			t.Error(err)
@@ -122,6 +123,7 @@ func TestCommandPreservesChildExitInTerminal(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		os.Stdin, os.Stdout = previousInput, previousOutput
+		close(closing)
 		if err := slave.Close(); err != nil {
 			t.Error(err)
 		}
@@ -140,8 +142,16 @@ func TestCommandPreservesChildExitInTerminal(t *testing.T) {
 		for {
 			n, err := master.Read(buf)
 			if err != nil {
-				if !errors.Is(err, os.ErrClosed) && !errors.Is(err, syscall.EIO) {
-					t.Error(err)
+				select {
+				case <-closing:
+					// Closing the slave ends the blocked read: Linux reports EIO and
+					// macOS a zero-byte read (io.EOF). A read that starts after the
+					// master closes reports os.ErrClosed.
+					if !errors.Is(err, io.EOF) && !errors.Is(err, syscall.EIO) && !errors.Is(err, os.ErrClosed) {
+						t.Error(err)
+					}
+				default:
+					t.Errorf("outer terminal closed before cleanup: %v", err)
 				}
 				return
 			}
