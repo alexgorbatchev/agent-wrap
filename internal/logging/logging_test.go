@@ -47,8 +47,6 @@ func TestHumanAttributes(t *testing.T) {
 		"bool", true, "duration", time.Second, "err", errors.New("with spaces"), "empty", "")
 	logger.Warn("warning")
 	logger.Error("failure")
-	logger.Info("named", "env", "machine", "envId", "hidden-env", "project", "repo", "projectId", "hidden-project")
-	logger.Info("ids", "envId", "visible-env", "projectId", "visible-project")
 	logger.WithGroup("meta").With("region", "local").Info("grouped", "pid", 42)
 	if h.WithGroup("") != h {
 		t.Fatal("empty group changed the handler")
@@ -59,13 +57,10 @@ func TestHumanAttributes(t *testing.T) {
 	}
 	for _, want := range []string{"[DEBUG] details", "[WARN] warning", "[ERROR] failure", `text="quote \" newline\n"`,
 		"n=-2", "u=3", "f=1.5", "bool=true", "duration=1s", `err="with spaces"`, `empty=""`,
-		"env=machine", "project=repo", "visible-env", "visible-project", "meta.region=local", "meta.pid=42", "00:00:00 [ERROR+4] custom"} {
+		"meta.region=local", "meta.pid=42", "[ERROR+4] custom"} {
 		if !strings.Contains(buf.String(), want) {
 			t.Errorf("missing %q in %q", want, buf.String())
 		}
-	}
-	if strings.Contains(buf.String(), "hidden-env") || strings.Contains(buf.String(), "hidden-project") {
-		t.Fatal(buf.String())
 	}
 }
 

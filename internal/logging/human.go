@@ -15,8 +15,8 @@ import (
 type humanHandler struct {
 	w      io.Writer
 	level  slog.Level
-	attrs  []slog.Attr
-	groups []string
+	attrs  string
+	prefix string
 	mu     *sync.Mutex
 }
 
@@ -33,77 +33,31 @@ func (h *humanHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 func (h *humanHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	newAttrs := make([]slog.Attr, len(h.attrs), len(h.attrs)+len(attrs))
-	copy(newAttrs, h.attrs)
-	newAttrs = append(newAttrs, attrs...)
-	return &humanHandler{
-		w:      h.w,
-		level:  h.level,
-		attrs:  newAttrs,
-		groups: h.groups,
-		mu:     h.mu,
+	var buf bytes.Buffer
+	buf.WriteString(h.attrs)
+	for _, a := range attrs {
+		appendHumanAttr(&buf, h.prefix, a)
 	}
+	next := *h
+	next.attrs = buf.String()
+	return &next
 }
 
 func (h *humanHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h
 	}
-	newGroups := make([]string, len(h.groups), len(h.groups)+1)
-	copy(newGroups, h.groups)
-	newGroups = append(newGroups, name)
-	return &humanHandler{
-		w:      h.w,
-		level:  h.level,
-		attrs:  h.attrs,
-		groups: newGroups,
-		mu:     h.mu,
-	}
+	next := *h
+	next.prefix += name + "."
+	return &next
 }
 
 func (h *humanHandler) Handle(_ context.Context, r slog.Record) error {
-	allAttrs := make([]slog.Attr, 0, len(h.attrs)+r.NumAttrs())
-
-	addAttr := func(a slog.Attr) {
-		a.Value = a.Value.Resolve()
-		if len(h.groups) > 0 {
-			a.Key = strings.Join(h.groups, ".") + "." + a.Key
-		}
-		// In human mode, hide redundant service=... attribute since dev-stack / runner provides service prefix
-		if a.Key == "service" {
-			return
-		}
-		allAttrs = append(allAttrs, a)
-	}
-
-	for _, a := range h.attrs {
-		addAttr(a)
-	}
-	r.Attrs(func(a slog.Attr) bool {
-		addAttr(a)
-		return true
-	})
-
-	hasEnv := false
-	hasProject := false
-	for _, a := range allAttrs {
-		if a.Key == "env" && a.Value.String() != "" {
-			hasEnv = true
-		}
-		if a.Key == "project" && a.Value.String() != "" {
-			hasProject = true
-		}
-	}
-
 	var buf bytes.Buffer
-	t := r.Time
-	if t.IsZero() {
-		buf.WriteString("00:00:00")
-	} else {
-		buf.WriteString(t.Format("15:04:05"))
+	if !r.Time.IsZero() {
+		buf.WriteString(r.Time.Format("15:04:05"))
+		buf.WriteString(" ")
 	}
-
-	buf.WriteString(" ")
 	switch r.Level {
 	case slog.LevelDebug:
 		buf.WriteString("[DEBUG]")
@@ -122,25 +76,42 @@ func (h *humanHandler) Handle(_ context.Context, r slog.Record) error {
 		buf.WriteString(r.Message)
 	}
 
-	for _, a := range allAttrs {
-		if hasEnv && a.Key == "envId" {
-			continue
-		}
-		if hasProject && a.Key == "projectId" {
-			continue
-		}
-
-		buf.WriteString(" ")
-		buf.WriteString(a.Key)
-		buf.WriteString("=")
-		buf.WriteString(formatAttrValue(a.Value))
-	}
+	buf.WriteString(h.attrs)
+	r.Attrs(func(a slog.Attr) bool {
+		appendHumanAttr(&buf, h.prefix, a)
+		return true
+	})
 	buf.WriteString("\n")
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	_, err := h.w.Write(buf.Bytes())
 	return err
+}
+
+func appendHumanAttr(buf *bytes.Buffer, prefix string, a slog.Attr) {
+	a.Value = a.Value.Resolve()
+	if a.Equal(slog.Attr{}) {
+		return
+	}
+	// Human log files belong to this wrapper; omit the logger's service field.
+	if a.Key == "service" {
+		return
+	}
+	if a.Value.Kind() == slog.KindGroup {
+		if a.Key != "" {
+			prefix += a.Key + "."
+		}
+		for _, child := range a.Value.Group() {
+			appendHumanAttr(buf, prefix, child)
+		}
+		return
+	}
+	buf.WriteString(" ")
+	buf.WriteString(prefix)
+	buf.WriteString(a.Key)
+	buf.WriteString("=")
+	buf.WriteString(formatAttrValue(a.Value))
 }
 
 func formatAttrValue(v slog.Value) string {

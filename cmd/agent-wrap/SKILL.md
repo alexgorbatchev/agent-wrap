@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-05 11:08
+  last_modified: 2026-10-05 11:20
   status: current
 ---
 
@@ -72,6 +72,11 @@ Concurrent wrappers use separate temporary watcher state below
 ${XDG_CACHE_HOME:-the OS user cache}/agent-wrap/session-*, removed on shutdown.
 Logs rotate at 10 MB, retain five backups for 14 days, and compress rotations.
 Default logs are ${XDG_STATE_HOME:-~/.local/state}/agent-wrap/session-*.log.
+Human log records use `HH:MM:SS [LEVEL] message key=value`; zero timestamps
+are omitted. Attribute groups expand into dotted keys, attributes retain the
+group active when added, and empty attributes/groups are omitted. The human
+format hides the service field and preserves other fields, including ID fields.
+Agent logs use slog text records with `action` for the message and include service.
 Git metadata is refreshed on reported tool activity, including tool results.
 
 Configure discovery through inherited environment variables:
