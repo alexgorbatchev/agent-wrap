@@ -5,12 +5,13 @@ set -euo pipefail
 project=$(cd "$(dirname "$0")/.." && pwd -P)
 mkdir -p "$project/.tmp"
 scratch=$(mktemp -d "$project/.tmp/native-isolation.XXXXXX")
-git clone --quiet --no-tags --no-hardlinks --local "$project" "$scratch/checkout"
-cp "$project/scripts/native.sh" "$scratch/checkout/scripts/native.sh"
-cd "$scratch/checkout"
+# A colon is legal in the source path, but is a separator in Git ceiling lists.
+git clone --quiet --no-tags --no-hardlinks --local "$project" "$scratch/checkout:colon"
+cp "$project/scripts/native.sh" "$scratch/checkout:colon/scripts/native.sh"
+cd "$scratch/checkout:colon"
+prefix="$scratch/prefix"
 git tag v0.0.0-native-isolation
-just native > "$scratch/tagged.log" 2>&1 || { cat "$scratch/tagged.log" >&2; exit 1; }
-prefix=$(just --evaluate native_prefix)
+just --set native_prefix "$prefix" native > "$scratch/tagged.log" 2>&1 || { cat "$scratch/tagged.log" >&2; exit 1; }
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --static --libs --cflags libghostty-vt-static > "$scratch/tagged.pkg-config"
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --modversion libghostty-vt-static > "$scratch/tagged.version"
 native_root=$(just --evaluate native_root)
@@ -19,10 +20,10 @@ GIT_DIR="$PWD/.git" GIT_WORK_TREE="$PWD" GIT_COMMON_DIR="$PWD/.git" GIT_CEILING_
     bash scripts/native.sh "$native_root" "$target" "$prefix" > "$scratch/inherited.log" 2>&1 || { cat "$scratch/inherited.log" >&2; exit 1; }
 git worktree add --quiet --detach "$scratch/worktree" HEAD
 cp "$project/scripts/native.sh" "$scratch/worktree/scripts/native.sh"
-(cd "$scratch/worktree" && just native) > "$scratch/worktree.log" 2>&1 || { cat "$scratch/worktree.log" >&2; exit 1; }
+(cd "$scratch/worktree" && just --set native_prefix "$prefix" native) > "$scratch/worktree.log" 2>&1 || { cat "$scratch/worktree.log" >&2; exit 1; }
 test "$(cd "$scratch/worktree" && just --evaluate native_root)" = "$native_root"
 git tag --delete v0.0.0-native-isolation > /dev/null
-just native > "$scratch/untagged.log" 2>&1 || { cat "$scratch/untagged.log" >&2; exit 1; }
+just --set native_prefix "$prefix" native > "$scratch/untagged.log" 2>&1 || { cat "$scratch/untagged.log" >&2; exit 1; }
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --static --libs --cflags libghostty-vt-static > "$scratch/untagged.pkg-config"
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --modversion libghostty-vt-static > "$scratch/untagged.version"
 cmp "$scratch/tagged.pkg-config" "$scratch/untagged.pkg-config"
