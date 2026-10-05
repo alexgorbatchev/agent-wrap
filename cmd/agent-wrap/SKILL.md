@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-05 11:20
+  last_modified: 2026-10-05 18:00
   status: current
 ---
 
@@ -70,8 +70,17 @@ metadata retain their directory-identity and default-branch fallbacks.
 Malformed remote errors report parse details without displaying the raw URL.
 Concurrent wrappers use separate temporary watcher state below
 ${XDG_CACHE_HOME:-the OS user cache}/agent-wrap/session-*, removed on shutdown.
-Logs rotate at 10 MB, retain five backups for 14 days, and compress rotations.
+Startup removes orphan cache directories last modified more than 14 days ago;
+fresh caches and caches locked by live wrappers remain. Ownership uses a lifetime
+advisory lock on each cache's owner.lock; agent-wrap.lock alongside the cache root
+serializes cache startup sweeps. Default logs hold session-*.log.lock ownership
+locks in their state directory, with .cleanup.lock serializing log sweeps there.
+Logs rotate at 10 MB, retain five backups per log for 14 days, and compress rotations.
 Default logs are ${XDG_STATE_HOME:-~/.local/state}/agent-wrap/session-*.log.
+With the default log destination, startup removes prior session logs and rotations
+last modified more than 14 days ago, preserving live wrappers' logs even when idle.
+An explicit --log-file skips this cross-session log cleanup; per-file rotation
+and orphan-cache cleanup still apply.
 Human log records use `HH:MM:SS [LEVEL] message key=value`; zero timestamps
 are omitted. Attribute groups expand into dotted keys, attributes retain the
 group active when added, and empty attributes/groups are omitted. The human
