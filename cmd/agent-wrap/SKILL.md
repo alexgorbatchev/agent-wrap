@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-05 11:46
+  last_modified: 2026-10-05 11:47
   status: current
 ---
 
@@ -59,8 +59,10 @@ block if it fits and omit additional blocks to leave an active color visible.
 Expect the child's exit code, including 128 + signal number for signal exits.
 Wrapper failures exit 1. Help and version print to stdout; errors print to stderr.
 Wrapping owns terminal I/O and restores it on shutdown; cancellation terminates
-the owned child session and joins observation workers. Working-context errors
-go to the wrapper log. No telemetry server or network calls are required by
+the owned child session and joins observation workers. SIGINT, SIGTERM, and
+SIGHUP cancel the session through this shutdown path. Terminal restoration
+errors are reported as cleanup errors while session state cleanup still runs.
+Working-context errors go to the wrapper log. No telemetry server or network calls are required by
 the wrapper; the launched agent retains its own normal behavior.
 
 Use Git installed on PATH for repository metadata. Harness storage is read-only.
