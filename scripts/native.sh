@@ -27,5 +27,8 @@ else
     trap - EXIT
 fi
 cd "$source"
-zig build -Demit-lib-vt -Demit-xcframework=false -Doptimize=ReleaseFast -Dtarget="$target" --prefix "$prefix" --cache-dir "$root/cache-$target" --global-cache-dir "$root/zig-global-cache"
+# The archive has no repository: keep Ghostty's Git discovery inside its source
+# tree, including when this script inherits an explicit enclosing repository.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+GIT_CEILING_DIRECTORIES="$(cd .. && pwd -P)" zig build -Demit-lib-vt -Demit-xcframework=false -Doptimize=ReleaseFast -Dtarget="$target" --prefix "$prefix" --cache-dir "$root/cache-$target" --global-cache-dir "$root/zig-global-cache"
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --static --libs --cflags libghostty-vt-static
