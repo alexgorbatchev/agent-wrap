@@ -210,6 +210,115 @@ func TestRuntimeFilesConcurrentOwnership(t *testing.T) {
 	}
 }
 
+func TestLiveExplicitLogRetention(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "first-cache"))
+	path := filepath.Join(root, "state", "agent-wrap", "session-explicit.log")
+	prior := filepath.Join(filepath.Dir(path), "session-prior.log")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(prior, []byte("prior record"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-15 * 24 * time.Hour)
+	if err := os.Chtimes(prior, old, old); err != nil {
+		t.Fatal(err)
+	}
+	f, err := runtimeFiles(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := f.close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := os.Stat(prior); err != nil {
+		t.Fatal("explicit startup swept another log", err)
+	}
+	f.logger.Info("before sweep")
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "second-cache"))
+	other, err := runtimeFiles("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := other.close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(prior); !os.IsNotExist(err) {
+		t.Fatal("default startup did not sweep expired prior log", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("live explicit log deleted", err)
+	}
+	f.logger.Info("after sweep")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "after sweep") {
+		t.Fatal("live explicit output lost", string(data))
+	}
+}
+
+func TestExplicitLogOwnershipConflict(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", root)
+	t.Setenv("XDG_CACHE_HOME", root)
+	path := filepath.Join(root, "agent-wrap", "session-explicit.log")
+	f, err := runtimeFiles(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "other-cache"))
+	type outcome struct {
+		files *files
+		err   error
+	}
+	done := make(chan outcome, 1)
+	go func() { second, err := runtimeFiles(path); done <- outcome{second, err} }()
+	select {
+	case second := <-done:
+		if second.err == nil || !strings.Contains(second.err.Error(), "already in use") {
+			t.Errorf("ownership failure lacks context: %v", second.err)
+		}
+		entries, err := os.ReadDir(filepath.Join(root, "other-cache", "agent-wrap"))
+		if err != nil || len(entries) != 0 {
+			t.Errorf("failed duplicate startup leaked cache: %v %v", entries, err)
+		}
+		if _, err := os.Stat(f.logOwner.Name()); err != nil {
+			t.Errorf("duplicate startup removed live ownership: %v", err)
+		}
+		if err := f.close(); err != nil {
+			t.Fatal(err)
+		}
+		if second.files != nil {
+			if err := second.files.close(); err != nil {
+				t.Error(err)
+			}
+		}
+		if second.files != nil || second.err == nil {
+			t.Fatalf("duplicate destination result=%+v", second)
+		}
+	case <-time.After(3 * time.Second):
+		if err := f.close(); err != nil {
+			t.Fatal(err)
+		}
+		second := <-done
+		if second.files != nil {
+			if err := second.files.close(); err != nil {
+				t.Error(err)
+			}
+		}
+		t.Fatal("duplicate explicit destination blocked startup")
+	}
+}
+
 func TestRuntimeFilesRetentionFailures(t *testing.T) {
 	for _, location := range []string{"cache-guard", "log-guard", "cache-owner"} {
 		t.Run(location, func(t *testing.T) {

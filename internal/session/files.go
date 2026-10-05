@@ -64,13 +64,18 @@ func runtimeFiles(logPath string) (result *files, err error) {
 		return nil, errors.Join(fmt.Errorf("open wrapper log: %w", err), f.close())
 	}
 	f.log = log
-	if defaultLog {
+	// Any session-shaped destination can share a default state directory with
+	// another wrapper, even when selected explicitly and using another cache root.
+	if match := sessionLog.FindStringSubmatch(filepath.Base(logPath)); match != nil {
 		logGuard, lockErr := lockFile(filepath.Join(filepath.Dir(logPath), ".cleanup.lock"), unix.LOCK_EX)
 		if lockErr != nil {
 			return nil, errors.Join(lockErr, f.close())
 		}
 		defer func() { result, err = releaseStartupLock(logGuard, result, err) }()
-		f.logOwner, err = lockFile(logPath+".lock", unix.LOCK_EX)
+		f.logOwner, err = openLockedFile(filepath.Join(filepath.Dir(logPath), match[1]+".log.lock"), unix.O_CREAT, unix.LOCK_EX|unix.LOCK_NB)
+		if errors.Is(err, unix.EWOULDBLOCK) {
+			return nil, errors.Join(fmt.Errorf("log destination %q is already in use: %w", logPath, err), f.close())
+		}
 		if err != nil {
 			return nil, errors.Join(err, f.close())
 		}

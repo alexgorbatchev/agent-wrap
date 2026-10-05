@@ -15,11 +15,15 @@ import (
 var sessionLog = regexp.MustCompile(`^(session-[A-Za-z0-9]+)(-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}\.[0-9]{3})?\.log(\.gz)?$`)
 
 func lockFile(path string, mode int) (*os.File, error) {
-	flags := unix.O_RDWR | unix.O_CLOEXEC | unix.O_NOFOLLOW
+	flags := 0
 	if mode&unix.LOCK_NB == 0 {
 		flags |= unix.O_CREAT
 	}
-	fd, err := unix.Open(path, flags, 0600)
+	return openLockedFile(path, flags, mode)
+}
+
+func openLockedFile(path string, flags, mode int) (*os.File, error) {
+	fd, err := unix.Open(path, flags|unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}
