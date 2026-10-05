@@ -19,6 +19,10 @@ import (
 const Rows = 3
 const pinWidth = 3
 
+// go-colorful scales CIEDE2000 distances by 100; .3 is a Delta E of 30.
+const minimumBlockDistance = .3
+const contextHueCandidates = 12
+
 // State owns its history; Move never mutates previously submitted states.
 type State struct {
 	Current project.Context
@@ -54,7 +58,7 @@ func hueColor(h float64) color.RGBA {
 // bright uses a fixed saturated palette with a stable hue for each identity.
 func bright(key string) color.RGBA { return hueColor(hue(key)) }
 
-// background separates context colors from the project hue by at least 60°.
+// background separates context colors perceptually from the project pin.
 func background(c project.Context) color.RGBA {
 	if !c.Split() {
 		return bright(c.Identity)
@@ -63,7 +67,22 @@ func background(c project.Context) color.RGBA {
 	if c.Worktree {
 		key += "\x00worktree"
 	}
-	return hueColor(math.Mod(hue(c.Identity)+60+math.Mod(hue(key), 240), 360))
+	base, _ := colorful.MakeColor(bright(c.Identity)) // generated colors are opaque
+	start := hue(c.Identity) + 60 + math.Mod(hue(key), 240)
+	best := bright(c.Identity)
+	var farthest float64
+	for i := range contextHueCandidates {
+		candidate := hueColor(math.Mod(start+float64(i)*360/contextHueCandidates, 360))
+		col, _ := colorful.MakeColor(candidate) // generated colors are opaque
+		distance := base.DistanceCIEDE2000(col)
+		if distance >= minimumBlockDistance {
+			return candidate
+		}
+		if distance > farthest {
+			best, farthest = candidate, distance
+		}
+	}
+	return best
 }
 
 // Draw fills three rows, preserving complete history pins when space allows.

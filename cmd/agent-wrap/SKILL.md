@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-10-02 23:20
+  last_modified: 2026-10-03 11:40
   status: current
 ---
 
@@ -43,6 +43,11 @@ without origin use local directory identity. Subtrees, non-default branches,
 and worktrees have distinct context colors; a known default branch at the
 primary root uses one project color. An unknown default branch is labeled
 and uses a split color until --default-branch specifies it.
+Context colors are selected by perceptual color distance from their project
+block, so neighboring hues that look similar are skipped.
+To populate missing local origin/HEAD metadata from the remote, run
+`git remote set-head origin --auto` once in that repository; this Git command
+contacts the remote. The wrapper reads the resulting local metadata offline.
 
 Preserve visited project colors in successive three-column blocks. Returning
 to an earlier project drops later blocks. A split active context has its own

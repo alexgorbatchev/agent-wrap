@@ -1,13 +1,42 @@
 package header
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 	"testing"
 
 	"github.com/alexgorbatchev/agent-wrap/internal/project"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/lucasb-eyer/go-colorful"
 )
+
+func TestRenderedBlockSeparation(t *testing.T) {
+	for i := range 360 {
+		c := projectContext(fmt.Sprintf("project-%d", i))
+		for _, kind := range []string{"branch", "subtree", "worktree", "unknown default"} {
+			next := c
+			switch kind {
+			case "branch":
+				next.Branch = "feature"
+			case "subtree":
+				next.Subtree = "src"
+			case "worktree":
+				next.Worktree = true
+			case "unknown default":
+				next.DefaultBranch = ""
+			}
+			view := uv.NewScreenBuffer(80, Rows)
+			Draw(view, New(next), "Codex")
+			pin, _ := colorful.MakeColor(view.CellAt(0, 0).Style.Bg)
+			active, _ := colorful.MakeColor(view.CellAt(5, 0).Style.Bg)
+			distance := pin.DistanceCIEDE2000(active)
+			if distance < .3 {
+				t.Errorf("%s %s block distance %.3f; want >=0.3", c.Identity, kind, distance)
+			}
+		}
+	}
+}
 
 func projectContext(id string) project.Context {
 	return project.Context{Identity: id, Name: id, Dir: "/work/" + id, Root: "/work/" + id, Branch: "trunk", DefaultBranch: "trunk"}
