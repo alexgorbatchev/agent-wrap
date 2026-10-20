@@ -21,7 +21,7 @@ default:
 # Build the pinned native terminal archive with Zig 0.16.0.
 native:
     mkdir -p .tmp
-    bash scripts/native.sh {{quote(native_root)}} {{quote(native_target)}} {{quote(native_prefix)}}
+    bash scripts/native.sh {{ quote(native_root) }} {{ quote(native_target) }} {{ quote(native_prefix) }}
 
 # Preserve individual arguments, including spaces and flags after --.
 run *args: native
@@ -32,7 +32,7 @@ run-ai *args: native
 
 build: native
     mkdir -p bin
-    go build {{if os() == 'linux' {'-ldflags="-linkmode=external -extldflags=-static"'} else {''}}} -o bin/agent-wrap ./cmd/agent-wrap
+    go build {{ if os() == 'linux' { '-ldflags="-linkmode=external -extldflags=-static"' } else { '' } }} -o bin/agent-wrap ./cmd/agent-wrap
 
 test: native
     bash scripts/check-coverage.sh -race ./...
@@ -51,3 +51,9 @@ check:
 
 fmt:
     go fmt ./...
+
+# Prepare dependencies and generated assets for local development
+setup:
+    mkdir -p .tmp
+    go mod download
+    just native
