@@ -1,0 +1,39 @@
+[package]
+name = "agent-wrap"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Interactive coding agent wrapper with a live project and branch header"
+
+[dependencies]
+agent-common = { path = "../agent-status/packages/agent-common" }
+agent-parser = { path = "../agent-parser" }
+agent-watcher = { path = "../agent-watcher" }
+cli-command-kit = { path = "../cli-command-kit" }
+tui-frame = { path = "../tui-frame" }
+portable-pty = { path = "../tui-frame/vendor/portable-pty" }
+clap = { version = "4.6.7", features = ["string"] }
+clap_complete = "4.6.5"
+dirs = "7.0.0"
+log = "0.4.32"
+log4rs = { path = "vendor/log4rs", default-features = false, features = ["rolling_file_appender","compound_policy","fixed_window_roller","size_trigger","pattern_encoder","gzip"] }
+go-duration = "0.2.0"
+libc = "0.2.186"
+palette = "0.7.7"
+path-clean = "1.0.1"
+ratatui = { version = "0.30.2", default-features = false }
+regex = "1.12.4"
+serde_json = "1.0.150"
+sha2 = "0.11.0"
+signal-hook = "0.4.3"
+strip-ansi-escapes = "0.2.1"
+tempfile = "3.27.0"
+thiserror = "2.0.18"
+tokio = { version = "1.52.1", features = ["rt-multi-thread", "sync", "time"] }
+tokio-util = "0.7.18"
+tracing = "0.1.44"
+url = "2.5.8"
+
+[dev-dependencies]
+filetime = "0.2.29"
+rusqlite = { version = "0.39.0", features = ["bundled"] }
