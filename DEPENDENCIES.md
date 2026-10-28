@@ -6,7 +6,7 @@ status: current
 
 # Native dependencies
 
-The wrapper directly consumes sibling `agent-parser`, `agent-watcher`, `agent-common`, `cli-command-kit`, and `tui-frame` libraries. `tui-frame` owns the pinned Ghostty library and portable-pty fork; its `DEPENDENCIES.md` records native sources and patches. The wrapper consumes that same portable-pty package identity for unchanged native launch arguments and signal exit metadata.
+The wrapper directly consumes revision-pinned GitHub `agent-parser`, `agent-watcher`, `agent-common`, `cli-command-kit`, and `tui-frame` libraries. `tui-frame` owns the pinned Ghostty library and portable-pty fork; its `DEPENDENCIES.md` records native sources and patches. The wrapper consumes that same portable-pty package identity for unchanged native launch arguments and signal exit metadata.
 
 Clap and clap_complete own argument validation and completion. Native palette implements CIEDE2000 color distance; Ratatui handles grapheme widths and cell styling. Git runs directly with a fixed English diagnostic locale. No reported tool command is evaluated. The maintained [`log4rs` 1.4.0](https://docs.rs/log4rs/1.4.0/log4rs/) rolling-file policies own size rotation, bounded archive counts and gzip compression.
 

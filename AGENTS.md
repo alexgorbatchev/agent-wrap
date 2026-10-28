@@ -18,7 +18,7 @@ Interactive agent terminal with a three-row project header. Parent instructions 
 
 ## Native setup
 
-- Keep sibling library checkouts named by `Cargo.toml`. The terminal dependency builds its checksum-pinned Ghostty source using `../tui-frame/scripts/native.sh`; consult `../tui-frame/AGENTS.md` for Zig, libclang, SDK, and build prerequisites.
+- External libraries resolve from pinned GitHub revisions in `Cargo.toml`. The `agent-common` dependency requires SSH access to private `agent-status-rust`. The terminal dependency builds its checksum-pinned Ghostty source using its own `scripts/native.sh`; consult [tui-frame prerequisites](https://github.com/alexgorbatchev/tui-frame-rust/blob/main/AGENTS.md) for Zig, libclang, SDK, and build prerequisites.
 - Git on PATH is required for metadata resolution and real subprocess tests. Tests use isolated fixtures under `.tmp/` and real PTYs; they do not require installed agent executables or user transcripts.
 - Preserve upstream licenses and record local native dependency patches in `DEPENDENCIES.md`. Literal log paths use the vendored log4rs native path APIs; never reintroduce environment expansion or lossy path conversion.
 

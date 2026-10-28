@@ -11,6 +11,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "agent-common"
 version = "0.1.0"
+source = "git+ssh://git@github.com/alexgorbatchev/agent-status-rust.git?rev=2bbe32074cee0b47b1f685f75d9bfcc6e0245d7d#2bbe32074cee0b47b1f685f75d9bfcc6e0245d7d"
 dependencies = [
  "agent-parser",
  "chrono",
@@ -27,6 +28,7 @@ dependencies = [
 [[package]]
 name = "agent-parser"
 version = "0.1.0"
+source = "git+https://github.com/alexgorbatchev/agent-parser-rust.git?rev=2c013b856c26ec215120a2c39973e16381c645dc#2c013b856c26ec215120a2c39973e16381c645dc"
 dependencies = [
  "chrono",
  "go-parse-duration",
@@ -40,6 +42,7 @@ dependencies = [
 [[package]]
 name = "agent-watcher"
 version = "0.1.0"
+source = "git+https://github.com/alexgorbatchev/agent-watcher-rust.git?rev=9c7532c9950c6fd188374e8ff7266480c558ab7c#9c7532c9950c6fd188374e8ff7266480c558ab7c"
 dependencies = [
  "agent-parser",
  "chrono",
@@ -390,6 +393,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 [[package]]
 name = "cli-command-kit"
 version = "0.1.0"
+source = "git+https://github.com/alexgorbatchev/cli-command-kit-rust.git?rev=40210e689762f6606776764bb3696e2685198c2e#40210e689762f6606776764bb3696e2685198c2e"
 dependencies = [
  "clap",
  "dirs",
@@ -1624,6 +1628,7 @@ checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 [[package]]
 name = "portable-pty"
 version = "0.9.0"
+source = "git+https://github.com/alexgorbatchev/tui-frame-rust.git?rev=3e3198f558f2d71e2f0e5b9c45bc559f26217378#3e3198f558f2d71e2f0e5b9c45bc559f26217378"
 dependencies = [
  "anyhow",
  "bitflags 1.3.2",
@@ -2437,6 +2442,7 @@ dependencies = [
 [[package]]
 name = "tui-frame"
 version = "0.1.0"
+source = "git+https://github.com/alexgorbatchev/tui-frame-rust.git?rev=3e3198f558f2d71e2f0e5b9c45bc559f26217378#3e3198f558f2d71e2f0e5b9c45bc559f26217378"
 dependencies = [
  "anstyle",
  "anstyle-lossy",
