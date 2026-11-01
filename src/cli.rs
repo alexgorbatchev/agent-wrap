@@ -11,7 +11,10 @@ use std::{
 pub const SKILL: &str = include_str!("../skills/agent-wrap/SKILL.md");
 pub fn help_options() -> HelpOptions {
     HelpOptions {
-        skill: Some(SKILL.into()),
+        skill: Some(
+            cli_command_kit::SkillSource::new("alexgorbatchev/agent-wrap-rust", "main")
+                .expect("the fixed skill source names a GitHub repository"),
+        ),
         ..Default::default()
     }
 }
@@ -108,7 +111,7 @@ fn strip_descriptions(command: Command) -> Command {
 pub fn run(
     args: impl IntoIterator<Item = impl Into<OsString> + Clone>,
     mode: Mode,
-    mut output: &mut dyn Write,
+    output: &mut dyn Write,
 ) -> Result<u32> {
     let mut root = command(mode);
     let args = args.into_iter().map(Into::into).collect::<Vec<OsString>>();
@@ -124,7 +127,8 @@ pub fn run(
         writeln!(output, "{}", env!("CARGO_PKG_VERSION"))?;
         return Ok(0);
     }
-    if cli_command_kit::write_skill(&matches, &help_options(), &mut output)? {
+    if matches.subcommand_name() == Some("skill") {
+        output.write_all(SKILL.as_bytes())?;
         return Ok(0);
     }
     if let Some(("completion", matches)) = matches.subcommand() {
