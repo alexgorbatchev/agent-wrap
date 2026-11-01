@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/alexgorbatchev/agent-parser v1.0.0
 	github.com/alexgorbatchev/agent-watcher v1.0.1
-	github.com/alexgorbatchev/cobra-help-tree/v2 v2.1.1
+	github.com/alexgorbatchev/cobra-help-tree/v4 v4.0.0
 	github.com/alexgorbatchev/go-tui-frame v1.0.0
 	github.com/charmbracelet/ultraviolet v0.0.0-20261001125412-878653296cfd
 	github.com/charmbracelet/x/ansi v0.11.8

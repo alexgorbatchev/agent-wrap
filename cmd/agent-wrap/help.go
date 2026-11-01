@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alexgorbatchev/agent-wrap/internal/logging"
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v4"
 	"github.com/spf13/cobra"
 )
 
