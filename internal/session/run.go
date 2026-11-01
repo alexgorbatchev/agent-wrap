@@ -15,7 +15,7 @@ import (
 	"github.com/alexgorbatchev/agent-wrap/internal/activity"
 	"github.com/alexgorbatchev/agent-wrap/internal/header"
 	"github.com/alexgorbatchev/agent-wrap/internal/project"
-	frame "github.com/alexgorbatchev/go-tui-frame"
+	frame "github.com/alexgorbatchev/go-tui-frame/v2"
 	"golang.org/x/term"
 )
 

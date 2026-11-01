@@ -8,7 +8,7 @@ import (
 
 	watcher "github.com/alexgorbatchev/agent-watcher"
 	"github.com/alexgorbatchev/agent-wrap/internal/activity"
-	frame "github.com/alexgorbatchev/go-tui-frame"
+	frame "github.com/alexgorbatchev/go-tui-frame/v2"
 )
 
 type observer struct {

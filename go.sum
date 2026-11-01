@@ -4,8 +4,8 @@ github.com/alexgorbatchev/agent-watcher v1.0.1 h1:NqbJkK4qMAQ3ZROmJHkx055ZGEdIe7
 github.com/alexgorbatchev/agent-watcher v1.0.1/go.mod h1:+uLReLosF5GHp1iBlehmoaERWHU0Qs0ZyzGUFZ5ZuAo=
 github.com/alexgorbatchev/cobra-help-tree/v4 v4.0.0 h1:lsgP09cFsQq25htGjEYvh8ATiBE7t7R7ECfJBe01QVU=
 github.com/alexgorbatchev/cobra-help-tree/v4 v4.0.0/go.mod h1:iW2OKycMBhufRu+sBuCIqV8uwzqLfLzz24zyP65j/cY=
-github.com/alexgorbatchev/go-tui-frame v1.0.0 h1:PWbNNx5LjALHbAyaCu6qg5hwXU855bjtIxZjj4d5heo=
-github.com/alexgorbatchev/go-tui-frame v1.0.0/go.mod h1:FZJA6GL61w2R7K2ZRRJ56G/Sm/o3pJLGdKJj5cbQrHA=
+github.com/alexgorbatchev/go-tui-frame/v2 v2.0.0 h1:3K9ghKlrxBMMtJvJd41N/K8/jVVWHSpqGZ2sX72YQfI=
+github.com/alexgorbatchev/go-tui-frame/v2 v2.0.0/go.mod h1:iTYOn22F36rzEcq1/CiRf+Rk65N/wBbg/6szJLsrJ6c=
 github.com/charmbracelet/colorprofile v0.4.3 h1:QPa1IWkYI+AOB+fE+mg/5/4HRMZcaXex9t5KX76i20Q=
 github.com/charmbracelet/colorprofile v0.4.3/go.mod h1:/zT4BhpD5aGFpqQQqw7a+VtHCzu+zrQtt1zhMt9mR4Q=
 github.com/charmbracelet/ultraviolet v0.0.0-20261001125412-878653296cfd h1:W0HOPGkwRaAmV20plE/f+Rk6Xn+IdR8G0qHsGXcOnF8=
