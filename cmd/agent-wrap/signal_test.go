@@ -163,7 +163,9 @@ func testSignalShutdown(t *testing.T, sig syscall.Signal, disconnect bool) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("wrapper did not exit after signal")
 	}
-	if disconnect && !strings.Contains(diagnostic.String(), "restore termios") {
+	// Closing the PTY can fail either terminal escape restoration or the
+	// termios ioctl, depending on the host. Both are real cleanup errors.
+	if disconnect && !strings.Contains(diagnostic.String(), "restore terminal modes:") && !strings.Contains(diagnostic.String(), "restore termios:") {
 		t.Errorf("missing terminal restoration error: %q", diagnostic.String())
 	}
 	entries, err = os.ReadDir(filepath.Join(cache, "agent-wrap"))
@@ -179,18 +181,39 @@ func testSignalShutdown(t *testing.T, sig syscall.Signal, disconnect bool) {
 
 func drainSignalTerminal(t *testing.T, master *os.File) func() {
 	t.Helper()
-	if err := unix.SetNonblock(int(master.Fd()), true); err != nil {
+	fd := int(master.Fd())
+	if err := unix.SetNonblock(fd, true); err != nil {
 		t.Fatal(err)
 	}
+	done, stop := make(chan struct{}), make(chan struct{})
 	em, err := ghostty.NewTerminal(ghostty.WithSize(80, 24), ghostty.WithWritePty(func(_ *ghostty.Terminal, data []byte) {
-		if _, err := master.Write(data); err != nil && !errors.Is(err, syscall.EIO) && !errors.Is(err, os.ErrClosed) {
-			t.Error(err)
+		for len(data) > 0 {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			n, err := unix.Write(fd, data)
+			if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EINTR) {
+				fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLOUT}}
+				if _, err := unix.Poll(fds, 20); err != nil && !errors.Is(err, unix.EINTR) {
+					t.Error(err)
+					return
+				}
+				continue
+			}
+			if err != nil {
+				if !errors.Is(err, syscall.EIO) && !errors.Is(err, os.ErrClosed) {
+					t.Error(err)
+				}
+				return
+			}
+			data = data[n:]
 		}
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, stop := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(done)
 		buf := make([]byte, 65536)
@@ -200,7 +223,7 @@ func drainSignalTerminal(t *testing.T, master *os.File) func() {
 				return
 			default:
 			}
-			fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
+			fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
 			if _, err := unix.Poll(fds, 20); err != nil {
 				if errors.Is(err, unix.EINTR) {
 					continue
@@ -214,7 +237,7 @@ func drainSignalTerminal(t *testing.T, master *os.File) func() {
 				}
 				continue
 			}
-			n, err := unix.Read(int(master.Fd()), buf)
+			n, err := unix.Read(fd, buf)
 			if err != nil {
 				if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EINTR) {
 					continue
