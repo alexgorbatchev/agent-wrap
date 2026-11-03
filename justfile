@@ -2,8 +2,7 @@ set positional-arguments
 set dotenv-load := false
 set tempdir := '.tmp'
 
-# Git lists the main checkout first, even when invoked from a linked worktree.
-main_root := shell('set -e; listing=$(git -C "$1" worktree list --porcelain); printf "%s\n" "$listing" | sed -n "1s/^worktree //p"', module_directory())
+main_root := shell('bash "$1/scripts/main-root.sh" "$1"', module_directory())
 native_root := main_root / '.tmp/native'
 host_arch := if arch() == 'x86_64' { 'amd64' } else if arch() == 'aarch64' { 'arm64' } else { error('Supported architectures: amd64 and arm64') }
 host_target := if host_arch == 'amd64' { 'x86_64-linux-musl' } else { 'aarch64-linux-musl' }
@@ -35,6 +34,7 @@ build: native
     go build {{ if os() == 'linux' { '-ldflags="-linkmode=external -extldflags=-static"' } else { '' } }} -o bin/agent-wrap ./cmd/agent-wrap
 
 test: native
+    bash scripts/check-main-root.sh
     bash scripts/check-coverage.sh -race ./...
 
 lint: native

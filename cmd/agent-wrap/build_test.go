@@ -20,9 +20,13 @@ func buildCommand(t *testing.T, dir, name string, args ...string) string {
 }
 
 func TestBuildSharesNativeDependencies(t *testing.T) {
-	justfile, err := os.ReadFile("../../justfile")
-	if err != nil {
-		t.Fatal(err)
+	files := make(map[string][]byte)
+	for _, name := range []string{"justfile", "scripts/main-root.sh"} {
+		data, err := os.ReadFile(filepath.Join("../..", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = data
 	}
 	for _, location := range []string{"nested", "external"} {
 		t.Run(location, func(t *testing.T) {
@@ -36,8 +40,14 @@ func TestBuildSharesNativeDependencies(t *testing.T) {
 			}
 			buildCommand(t, root, "git", "worktree", "add", "--detach", worktree, "main")
 			for _, dir := range []string{root, worktree} {
-				if err := os.WriteFile(filepath.Join(dir, "justfile"), justfile, 0o600); err != nil {
-					t.Fatal(err)
+				for name, data := range files {
+					path := filepath.Join(dir, name)
+					if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, data, 0o600); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if err := os.MkdirAll(filepath.Join(dir, ".tmp"), 0o700); err != nil {
 					t.Fatal(err)
