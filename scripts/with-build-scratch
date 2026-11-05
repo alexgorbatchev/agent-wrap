@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Build tools own temporary storage; tests and applications keep native defaults.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "$root/.tmp"
+scratch="$(mktemp -d "$root/.tmp/build.XXXXXX")"
+trap 'rm -r "$scratch"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 131' QUIT
+trap 'exit 143' TERM
+# Bash defers these traps until the foreground command exits, keeping its
+# scratch alive even when a signal is sent only to this wrapper.
+TMPDIR="$scratch" GOTMPDIR="$scratch" "$@"

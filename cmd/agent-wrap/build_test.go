@@ -54,7 +54,7 @@ func TestBuildSharesNativeDependencies(t *testing.T) {
 				}
 			}
 			native := buildCommand(t, root, "just", "--evaluate", "native_root")
-			want := filepath.Join(root, ".tmp", "native")
+			want := filepath.Join(root, ".cache", "native")
 			if native != want {
 				t.Fatalf("main native root = %q, want %q", native, want)
 			}
@@ -65,11 +65,13 @@ func TestBuildSharesNativeDependencies(t *testing.T) {
 					t.Errorf("%s differs: main %q, worktree %q", variable, mainValue, linkedValue)
 				}
 			}
-			for variable, suffix := range map[string]string{"TMPDIR": ".tmp", "GOCACHE": ".tmp/go-build-cache"} {
-				got := buildCommand(t, worktree, "just", "--evaluate", variable)
-				if want := filepath.Join(worktree, suffix); got != want {
-					t.Errorf("%s = %q, want worktree-local %q", variable, got, want)
-				}
+			cache := buildCommand(t, worktree, "go", "env", "GOCACHE")
+			if got := buildCommand(t, worktree, "just", "--command", "go", "env", "GOCACHE"); got != cache {
+				t.Errorf("recipe cache = %q, want caller's Go cache %q", got, cache)
+			}
+			temp := buildCommand(t, worktree, "sh", "-c", `printf '%s' "${TMPDIR-}"`)
+			if got := buildCommand(t, worktree, "just", "--command", "sh", "-c", `printf '%s' "${TMPDIR-}"`); got != temp {
+				t.Errorf("recipe TMPDIR = %q, want caller's %q", got, temp)
 			}
 			// Execute with the recipe exports, proving consumers can read the same artifact.
 			pkgConfig := buildCommand(t, root, "just", "--evaluate", "PKG_CONFIG_PATH")

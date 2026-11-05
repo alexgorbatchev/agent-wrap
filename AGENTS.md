@@ -14,10 +14,10 @@ Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harness
 
 ## Commands
 
-- Development prerequisites: Go 1.27.1, Zig 0.16.0, Git, `just`, `pkg-config`, `curl`, `tar`, and `shasum`. The native recipe builds the exact Ghostty source and checksum required by the pinned `go-tui-frame` module under the main checkout's `.tmp/native/`; Linux builds use Zig's musl target and static linkage.
+- Development prerequisites: Go 1.27.1, Zig 0.16.0, Git, `just`, `pkg-config`, `curl`, `tar`, and `shasum`. The native recipe builds the exact Ghostty source and checksum required by the pinned `go-tui-frame` module under the main checkout's `.cache/native/`; Linux builds use Zig's musl target and static linkage.
 - Lint requires `golangci-lint` built with Go 1.27 or newer (verified with v2.14.0); an older build cannot analyze the workspace toolchain.
-- Always reuse the main checkout's `.tmp/native/` for static dependencies, including Ghostty sources, archives, installation prefixes, and Zig caches, from every linked worktree. Resolve the main checkout through Git worktree metadata rather than the current branch name.
-- Go build caches and temporary files stay in each checkout's `.tmp/`; binaries stay in each checkout's `bin/`.
+- Always reuse the main checkout's `.cache/native/` for static dependencies, including Ghostty sources, archives, installation prefixes, and Zig caches, from every linked worktree. Resolve the main checkout through Git worktree metadata rather than the current branch name.
+- Use the caller's shared Go build cache. Build tools run through `bash scripts/with-build-scratch`, which owns a unique checkout `.tmp/build.*` directory and removes it after the foreground command exits, including failure and handled signals. Tests retain native temporary storage and clean up their fixtures. Never export a shared `TMPDIR` or `GOTMPDIR` from the justfile. Binaries stay in each checkout's `bin/`; run recipes build first and launch outside build scratch.
 - The project owns a Go 1.27.1 workspace because the frame requires it; run commands with `just` at the project root.
 - Supported runtime platforms: Linux and macOS; builds and PTY integration tests are verified on the host platform. Windows is unsupported by the terminal-frame dependency.
 
@@ -25,10 +25,12 @@ Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harness
 - Run: `just run -- claude` or `just run-ai -- codex`
 - Test: `just test` (race detector and >=90% statement coverage)
 - Lint: `just lint`
+- Check: `just check` (required locally while CI is disabled)
 - Native Git isolation regression: `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`).
 
 ## Boundaries
 
+- Keep CI disabled until explicitly authorized to re-enable it. Run `just check` locally and obtain independent review for ticket changes; do not add or enable a workflow as a prerequisite to those changes.
 - Always: update the embedded `cmd/agent-wrap/SKILL.md` in the same change as commands, flags, defaults, environment variables, output, or side effects; maintain interface drift tests.
 - Always: change behavioral tests with runtime changes and verify red/green, including temporarily disabling the implementation; require >=90% statement coverage in every Go package (scripts are excluded).
 - Always: isolate each wrapper's watcher state and restrict events to its child session; join workers on shutdown.

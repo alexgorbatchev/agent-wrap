@@ -2,9 +2,11 @@
 set -euo pipefail
 
 project=$(cd "$(dirname "$0")/.." && pwd -P)
-mkdir -p "$project/.tmp"
-scratch=$(mktemp -d "$project/.tmp/main-root.XXXXXX")
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/agent-wrap-main-root.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 
