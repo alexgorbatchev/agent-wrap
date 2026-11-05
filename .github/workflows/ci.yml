@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            zig_target: x86_64-linux
+            zig_sha: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+            just_target: x86_64-unknown-linux-musl
+            just_sha: 4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d
+          - os: macos-latest
+            zig_target: aarch64-macos
+            zig_sha: b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489
+            just_target: aarch64-apple-darwin
+            just_sha: 50ae3e996c974a0bf32ea7d10f495070df33f1b43e0616b2769e3d4821ed8f48
+    env:
+      # Match the justfile so setup-go caches the build output actually used.
+      GOCACHE: ${{ github.workspace }}/.tmp/go-build-cache
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Restore pinned build tools
+        id: tools
+        uses: actions/cache@v6
+        with:
+          path: .cache/ci-tools
+          key: tools-${{ runner.os }}-${{ runner.arch }}-zig-0.16.0-${{ matrix.zig_sha }}-just-1.58.0-${{ matrix.just_sha }}
+
+      - name: Install pinned build tools
+        if: steps.tools.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch=$(mktemp -d "$RUNNER_TEMP/build-tools.XXXXXX")
+          trap 'rm -r "$scratch"' EXIT
+          mkdir -p .cache/ci-tools/zig .cache/ci-tools/just
+          curl --fail --location --retry 3 'https://ziglang.org/download/0.16.0/zig-${{ matrix.zig_target }}-0.16.0.tar.xz' --output "$scratch/zig.tar.xz"
+          printf '%s  %s\n' '${{ matrix.zig_sha }}' "$scratch/zig.tar.xz" | shasum -a 256 --check
+          tar -xJf "$scratch/zig.tar.xz" --strip-components=1 -C .cache/ci-tools/zig
+          curl --fail --location --retry 3 'https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-${{ matrix.just_target }}.tar.gz' --output "$scratch/just.tar.gz"
+          printf '%s  %s\n' '${{ matrix.just_sha }}' "$scratch/just.tar.gz" | shasum -a 256 --check
+          tar -xzf "$scratch/just.tar.gz" -C .cache/ci-tools/just
+
+      - name: Configure build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$PWD/.cache/ci-tools/zig" "$PWD/.cache/ci-tools/just" >> "$GITHUB_PATH"
+          test "$(.cache/ci-tools/zig/zig version)" = '0.16.0'
+          test "$(.cache/ci-tools/just/just --version)" = 'just 1.58.0'
+          command -v pkg-config
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-only: true
+
+      - name: Resolve native build cache inputs
+        id: native
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=$(just --evaluate native_root)
+          target=$(just --evaluate native_target)
+          prefix=$(just --evaluate native_prefix)
+          host=$(zig targets | sed -n '/^    \.native = \.{$/,$p')
+          test -n "$host" || { printf 'zig targets printed no native target.\n' >&2; exit 1; }
+          digest=$(printf '%s\n' "$root" "$target" "$prefix" "$host" | shasum -a 256)
+          {
+            printf 'root=%s\n' "$root"
+            printf 'digest=%s\n' "${digest%% *}"
+          } >> "$GITHUB_OUTPUT"
+
+      # Zig cache entries depend on absolute paths and the host CPU/OS used
+      # for build-time generators. Restore only an exact matching native build.
+      - name: Restore native build cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.native.outputs.root }}
+          key: native-${{ runner.os }}-${{ runner.arch }}-zig-${{ matrix.zig_sha }}-scripts-${{ hashFiles('scripts/native.sh', 'scripts/native-git.sh', 'scripts/main-root.sh') }}-inputs-${{ steps.native.outputs.digest }}
+
+      - name: Run race tests, coverage, lint, and build
+        run: just check

@@ -25,6 +25,7 @@ Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harness
 - Run: `just run -- claude` or `just run-ai -- codex`
 - Test: `just test` (race detector and >=90% statement coverage)
 - Lint: `just lint`
+- CI: GitHub-hosted Ubuntu and macOS run `just check` on pushes and pull requests to `main`, including race tests, per-package coverage, module hygiene, vet, lint, and build. Keep CI and local validation on this same entrypoint.
 - Native Git isolation regression: `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`).
 
 ## Boundaries
