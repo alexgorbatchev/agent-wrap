@@ -19,6 +19,29 @@ func buildCommand(t *testing.T, dir, name string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+func buildTempAlias(t *testing.T) string {
+	t.Helper()
+	target := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "native temp")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Fatal(err)
+	}
+	return alias
+}
+
+func TestMainRootFromSymlinkedTemporaryDirectory(t *testing.T) {
+	alias := buildTempAlias(t)
+	t.Setenv("TMPDIR", alias)
+	buildCommand(t, "../..", "bash", "scripts/check-main-root.sh")
+	entries, err := os.ReadDir(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("main-root fixtures survived: %v", entries)
+	}
+}
+
 func TestBuildSharesNativeDependencies(t *testing.T) {
 	files := make(map[string][]byte)
 	for _, name := range []string{"justfile", "scripts/main-root.sh"} {
@@ -30,7 +53,7 @@ func TestBuildSharesNativeDependencies(t *testing.T) {
 	}
 	for _, location := range []string{"nested", "external"} {
 		t.Run(location, func(t *testing.T) {
-			base := t.TempDir()
+			base := buildTempAlias(t)
 			root := filepath.Join(base, "main checkout")
 			buildCommand(t, base, "git", "init", "-b", "main", root)
 			buildCommand(t, root, "git", "-c", "user.name=Build Test", "-c", "user.email=build@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "fixture")
@@ -54,7 +77,11 @@ func TestBuildSharesNativeDependencies(t *testing.T) {
 				}
 			}
 			native := buildCommand(t, root, "just", "--evaluate", "native_root")
-			want := filepath.Join(root, ".cache", "native")
+			canonicalRoot, err := filepath.EvalSymlinks(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := filepath.Join(canonicalRoot, ".cache", "native")
 			if native != want {
 				t.Fatalf("main native root = %q, want %q", native, want)
 			}
