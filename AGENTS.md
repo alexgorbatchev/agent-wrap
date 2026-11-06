@@ -26,7 +26,7 @@ Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harness
 - Test: `just test` (race detector and >=90% statement coverage)
 - Lint: `just lint`
 - Check: `just check` (required locally while CI is disabled)
-- Native Git isolation regression: `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`). Its Go supervisor owns a separate native process group, waits for every member to exit before removing scratch, and uses bounded TERM/KILL shutdown on cancellation. Preserve scratch and report failure when shutdown cannot be confirmed; print failing build logs before cleanup. Native commands must stay in that process group.
+- Native Git isolation regression: run `just build` then `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`). Both `setup` and `build` compile its supervisor into `bin/native-isolation`; rebuild after changing supervisor source. The supervisor owns a separate native process group, waits for every member to exit before removing scratch, and uses bounded TERM/KILL shutdown on cancellation. Preserve scratch and report failure when shutdown cannot be confirmed; print failing build logs before cleanup. Native commands must stay in that process group.
 
 ## Boundaries
 

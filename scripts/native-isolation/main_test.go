@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -182,5 +183,33 @@ func TestRunStartFailure(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(root, ".tmp"))
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("scratch survived failed launch: %v, %v", entries, err)
+	}
+}
+
+func TestLauncher(t *testing.T) {
+	root := fixture(t, "printf 'native body ran\\n'\n")
+	data, err := os.ReadFile("../check-native-isolation.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(root, "scripts/check-native-isolation.sh")
+	if err := os.WriteFile(launcher, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err := exec.Command("bash", launcher).CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "Run just setup or just build") {
+		t.Fatalf("missing supervisor = %v: %s", err, output)
+	}
+	build := exec.Command("go", "build", "-o", filepath.Join(root, "bin/native-isolation"), ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build supervisor: %v: %s", err, output)
+	}
+	output, err = exec.Command("bash", launcher).CombinedOutput()
+	if err != nil || string(output) != "native body ran\n" {
+		t.Fatalf("launch supervisor = %v: %s", err, output)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".tmp"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("launcher left scratch: %v, %v", entries, err)
 	}
 }

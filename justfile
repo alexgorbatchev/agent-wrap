@@ -26,9 +26,15 @@ run *args: build
 run-ai *args: build
     AGENT=1 bin/agent-wrap "$@"
 
-build: native
+build: native build-tools
     mkdir -p bin
     bash scripts/with-build-scratch go build {{ if os() == 'linux' { '-ldflags="-linkmode=external -extldflags=-static"' } else { '' } }} -o bin/agent-wrap ./cmd/agent-wrap
+
+# Build the supervisor before running the native isolation diagnostic.
+[private]
+build-tools:
+    mkdir -p bin
+    bash scripts/with-build-scratch go build -o bin/native-isolation ./scripts/native-isolation
 
 test: native
     bash scripts/check-main-root.sh
@@ -53,3 +59,4 @@ fmt:
 setup:
     bash scripts/with-build-scratch go mod download
     just native
+    just build-tools
