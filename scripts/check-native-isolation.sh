@@ -6,6 +6,14 @@ project=$(cd "$(dirname "$0")/.." && pwd -P)
 source "$project/scripts/native-git.sh"
 mkdir -p "$project/.tmp"
 scratch=$(mktemp -d "$project/.tmp/native-isolation.XXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 131' QUIT
+trap 'exit 143' TERM
+# Foreground commands finish before Bash runs these traps. Keep builds in the
+# foreground so cancellation cannot remove storage while they still use it.
+export TMPDIR="$scratch"
 git clone --quiet --no-tags --no-hardlinks --local "$project" "$scratch/checkout"
 cp "$project/scripts/native.sh" "$project/scripts/native-git.sh" "$scratch/checkout/scripts/"
 cd "$scratch/checkout"
@@ -34,4 +42,4 @@ PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --static --libs --cflags li
 PKG_CONFIG_PATH="$prefix/share/pkgconfig" pkg-config --modversion libghostty-vt-static > "$scratch/untagged.version"
 cmp "$scratch/tagged.pkg-config" "$scratch/untagged.pkg-config"
 cmp "$scratch/tagged.version" "$scratch/untagged.version"
-printf 'Tagged and untagged native builds match: %s\n' "$scratch"
+printf 'Tagged and untagged native builds match.\n'

@@ -26,7 +26,7 @@ Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harness
 - Test: `just test` (race detector and >=90% statement coverage)
 - Lint: `just lint`
 - Check: `just check` (required locally while CI is disabled)
-- Native Git isolation regression: `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`).
+- Native Git isolation regression: `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`). Keep commands in the foreground; the diagnostic removes its owned scratch after they exit on success, failure, or handled signals, and prints failing build logs to stderr before cleanup.
 
 ## Boundaries
 
