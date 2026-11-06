@@ -9,6 +9,8 @@ bin/
 
 # Directories and temporary files
 .tmp/
+/.state/
+/.workspaces/
 .codegraph/
 .cache/
 .pi-subagents/
