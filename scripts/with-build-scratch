@@ -6,6 +6,17 @@ if (($# == 0)); then
     exit 1
 fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
+# Bash cannot transfer terminal ownership without blocking in fg. Core Perl's
+# POSIX binding provides tcgetpgrp/tcsetpgrp before any build helper exists.
+terminal_group=$(perl -MPOSIX=tcgetpgrp -MErrno=ENXIO,ENODEV,ENOTTY -e '
+    open my $tty, "+<", "/dev/tty" or do {
+        exit 0 if $! == ENXIO || $! == ENODEV || $! == ENOTTY;
+        die "open controlling terminal: $!\n";
+    };
+    my $group = tcgetpgrp(fileno $tty);
+    die "read terminal foreground group: $!\n" unless defined $group && $group > 0;
+    print $group if $group == getpgrp;
+')
 mkdir -p "$root/.tmp"
 scratch="$(mktemp -d "$root/.tmp/build.XXXXXX")"
 stopped=0
@@ -14,6 +25,13 @@ grace=5
 
 cleanup() {
     local status=$?
+    if [[ -n "$terminal_group" ]]; then
+        perl -MPOSIX=tcsetpgrp -e '
+            open my $tty, "+<", "/dev/tty" or die "open controlling terminal: $!\n";
+            $SIG{TTOU} = "IGNORE";
+            tcsetpgrp(fileno $tty, $ARGV[0]) or die "restore terminal foreground group: $!\n";
+        ' "$terminal_group" || status=1
+    fi
     if ((stopped)); then
         rm -r -- "$scratch" || status=1
     else
@@ -34,7 +52,18 @@ trap 'if ((signal_status == 0)); then signal_status=143; fi' TERM
 # Job control gives this command its own group without depending on setsid
 # (not present on macOS) or a helper that setup would first have to build.
 set -m
-TMPDIR="$scratch" GOTMPDIR="$scratch" "$@" <&0 &
+TMPDIR="$scratch" GOTMPDIR="$scratch" perl -MPOSIX=tcsetpgrp -e '
+    if (shift @ARGV) {
+        open my $tty, "+<", "/dev/tty" or die "open controlling terminal: $!\n";
+        {
+            local $SIG{TTOU} = "IGNORE";
+            tcsetpgrp(fileno $tty, getpgrp) or die "give build command terminal foreground: $!\n";
+        }
+    }
+    exec {$ARGV[0]} @ARGV;
+    warn "exec build command: $!\n";
+    exit 127;
+' "$terminal_group" "$@" <&0 &
 child=$!
 set +m
 

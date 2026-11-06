@@ -32,15 +32,26 @@ func scratchAwaitFile(t *testing.T, path string) string {
 
 func scratchStopGroup(t *testing.T, group int) {
 	t.Helper()
-	if err := syscall.Kill(-group, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-		t.Error(err)
-	}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if errors.Is(syscall.Kill(-group, 0), syscall.ESRCH) {
-			return
+	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGKILL} {
+		if err := syscall.Kill(-group, sig); err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				return
+			}
+			t.Error(err)
 		}
-		time.Sleep(5 * time.Millisecond)
+		// A stopped fixture must be able to run its pending TERM handler.
+		if sig == syscall.SIGTERM {
+			if err := syscall.Kill(-group, syscall.SIGCONT); err != nil && !errors.Is(err, syscall.ESRCH) {
+				t.Error(err)
+			}
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if errors.Is(syscall.Kill(-group, 0), syscall.ESRCH) {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 	t.Errorf("process group %d survived fixture cleanup", group)
 }
@@ -49,6 +60,7 @@ type scratchCommand struct {
 	done   chan struct{}
 	output bytes.Buffer
 	err    error
+	stop   func()
 }
 
 func startScratchCommand(t *testing.T, cmd *exec.Cmd, markers string) *scratchCommand {
@@ -60,7 +72,7 @@ func startScratchCommand(t *testing.T, cmd *exec.Cmd, markers string) *scratchCo
 		t.Fatal(err)
 	}
 	go func() { run.err = cmd.Wait(); close(run.done) }()
-	t.Cleanup(func() {
+	run.stop = func() {
 		// A failing regression must still join every fixture process.
 		if data, err := os.ReadFile(filepath.Join(markers, "group")); err == nil {
 			group, err := strconv.Atoi(strings.TrimSpace(string(data)))
@@ -77,7 +89,8 @@ func startScratchCommand(t *testing.T, cmd *exec.Cmd, markers string) *scratchCo
 		case <-time.After(5 * time.Second):
 			t.Error("wrapper wait survived cleanup")
 		}
-	})
+	}
+	t.Cleanup(run.stop)
 	return run
 }
 
