@@ -82,6 +82,13 @@ func startScratchCommand(t *testing.T, cmd *exec.Cmd, markers string) *scratchCo
 				scratchStopGroup(t, group)
 			}
 		}
+		// The command group is gone, but the wrapper may still be removing
+		// scratch. Let its EXIT trap and output readers finish before escalation.
+		select {
+		case <-run.done:
+			return
+		case <-time.After(5 * time.Second):
+		}
 		// Wait concurrently so the direct child's zombie is reaped.
 		scratchStopGroup(t, cmd.Process.Pid)
 		select {
