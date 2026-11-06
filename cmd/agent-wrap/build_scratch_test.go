@@ -10,7 +10,8 @@ import (
 	"testing"
 )
 
-func TestBuildScratchLifetime(t *testing.T) {
+func buildScratchFixture(t *testing.T) (string, string) {
+	t.Helper()
 	data, err := os.ReadFile("../../scripts/with-build-scratch")
 	if err != nil {
 		t.Fatal(err)
@@ -23,6 +24,11 @@ func TestBuildScratchLifetime(t *testing.T) {
 	if err := os.WriteFile(script, data, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	return root, script
+}
+
+func TestBuildScratchLifetime(t *testing.T) {
+	root, script := buildScratchFixture(t)
 	for _, status := range []int{0, 7, 129, 130, 131, 143} {
 		t.Run(strconv.Itoa(status), func(t *testing.T) {
 			t.Parallel()
@@ -34,10 +40,14 @@ test "$TMPDIR" = "$GOTMPDIR"
 test -d "$TMPDIR"
 printf '%s\n' "$TMPDIR"
 test "$2" = 'argument with spaces'
+finish() {
+    sleep 0.05
+    printf retained > "$TMPDIR/still-owned"
+    printf finished > "$3"
+}
+trap 'finish "$@"; exit 0' TERM
 if test "$1" -gt 128; then kill -"$(($1 - 128))" "$PPID"; fi
-sleep 0.05
-printf retained > "$TMPDIR/still-owned"
-printf finished > "$3"
+finish "$@"
 if test "$1" -gt 128; then exit 0; fi
 exit "$1"`, "probe", strconv.Itoa(status), "argument with spaces", marker)
 			output, err := cmd.CombinedOutput()
