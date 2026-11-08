@@ -57,7 +57,6 @@ func TestReportedDirectory(t *testing.T) {
 		t.Fatal("a Codex patch's file_modification was ignored")
 	}
 	e.Data.FileModification = nil
-	e.Harness = watcher.HarnessCodex
 	e.Data.ToolInput = nil
 	e.EventType = "tool_call"
 	e.CWD = ""

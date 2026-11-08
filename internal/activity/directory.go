@@ -30,7 +30,6 @@ func Harness(executable, override string) (watcher.Harness, error) {
 	}
 }
 
-// Directory uses reported tool targets; non-tool events preserve the last target.
 // IsTool reports whether an event reports a tool's target: a tool call, or a
 // file a tool changed, which a multi-file Codex patch reports as one
 // file_modification event per file.
@@ -38,6 +37,7 @@ func IsTool(e watcher.Event) bool {
 	return e.EventType == "tool_call" || e.EventType == "file_modification"
 }
 
+// Directory uses reported tool targets; non-tool events preserve the last target.
 func Directory(e watcher.Event, previous string) string {
 	if !IsTool(e) {
 		return previous
