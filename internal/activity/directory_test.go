@@ -40,11 +40,23 @@ func TestReportedDirectory(t *testing.T) {
 		t.Fatal("result reset tool directory")
 	}
 	e.Harness = watcher.HarnessOpencode
-	e.EventType = "tool_use"
+	e.EventType = "tool_call"
 	e.Data.ToolInput = map[string]interface{}{"filePath": filepath.Join(sub, "file.go")}
 	if Directory(e, base) != sub {
-		t.Fatal("OpenCode's native tool_use event was ignored")
+		t.Fatal("OpenCode tool_call was ignored")
 	}
+	e.EventType = "tool_use"
+	if Directory(e, base) != base {
+		t.Fatal("an event type the parser no longer emits moved the directory")
+	}
+	e.Harness = watcher.HarnessCodex
+	e.EventType = "file_modification"
+	e.Data.ToolInput = nil
+	e.Data.FileModification = &parser.FileModification{Action: "EDIT", FilePath: filepath.Join(sub, "patched.go")}
+	if Directory(e, base) != sub {
+		t.Fatal("a Codex patch's file_modification was ignored")
+	}
+	e.Data.FileModification = nil
 	e.Harness = watcher.HarnessCodex
 	e.Data.ToolInput = nil
 	e.EventType = "tool_call"
