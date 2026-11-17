@@ -97,6 +97,40 @@ func TestResolveNewlineDirectories(t *testing.T) {
 	}
 }
 
+func TestResolveSeparateGitDirectoryWhitespace(t *testing.T) {
+	tests := []struct {
+		name        string
+		suffix      string
+		explicitDir bool
+	}{
+		{"trailing space", " ", false},
+		{"trailing tab", "\t", false},
+		{"embedded newline and trailing space", "\nname ", false},
+		{"trailing newline via GIT_DIR", "\n", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := repo(t, "main")
+			storage := filepath.Join(t.TempDir(), "storage"+tt.suffix)
+			git(t, dir, "init", "--separate-git-dir", storage)
+			if tt.explicitDir {
+				// Git's gitfile trims final newlines; the native environment can
+				// address a Git directory whose pathname ends with a newline.
+				t.Setenv("GIT_DIR", storage)
+				t.Setenv("GIT_WORK_TREE", dir)
+			}
+			got, err := Resolve(context.Background(), dir, "")
+			if err != nil || got.Worktree || got.Dir != dir || got.Root != dir || got.Identity != "github.com/owner/project" || got.Branch != "main" || got.DefaultBranch != "main" {
+				t.Fatalf("separate Git directory context = %+v, err=%v", got, err)
+			}
+			paths, err := readGitDirectories(context.Background(), dir)
+			if err != nil || len(paths) != 3 || paths[0] != dir || paths[1] != storage || paths[2] != storage {
+				t.Fatalf("native Git directories = %q, err=%v, want root=%q common/git=%q", paths, err, dir, storage)
+			}
+		})
+	}
+}
+
 // Trace2 observes the real Git processes without replacing Git or its responses.
 func tracedGitCommands(t *testing.T, path string) [][]string {
 	t.Helper()

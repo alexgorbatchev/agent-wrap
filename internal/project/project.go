@@ -150,7 +150,8 @@ func readGit(ctx context.Context, dir string, args ...string) (string, error) {
 		}
 		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	// Remove the native output record terminator, preserving pathname bytes.
+	return strings.TrimSuffix(string(out), "\n"), nil
 }
 
 func gitFailure(err error, code int, diagnostic string) bool {
