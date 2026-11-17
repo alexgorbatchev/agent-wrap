@@ -41,7 +41,7 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 		return Context{}, fmt.Errorf("directory is unavailable: %s", abs)
 	}
 	c := Context{Identity: "directory:" + abs, Name: filepath.Base(abs), Dir: abs, Root: abs}
-	root, err := readGit(ctx, abs, "rev-parse", "--show-toplevel")
+	paths, err := readGitDirectories(ctx, abs)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return Context{}, fmt.Errorf("git is required on PATH to identify projects: %w", err)
@@ -54,16 +54,9 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 		}
 		return Context{}, fmt.Errorf("read Git root: %w", err)
 	}
+	root, common, gitDir := paths[0], paths[1], paths[2]
 	c.Root = root
 	c.Name = filepath.Base(root)
-	common, err := readGit(ctx, abs, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return Context{}, fmt.Errorf("read Git common directory: %w", err)
-	}
-	gitDir, err := readGit(ctx, abs, "rev-parse", "--absolute-git-dir")
-	if err != nil {
-		return Context{}, fmt.Errorf("read Git directory: %w", err)
-	}
 	c.Worktree = filepath.Clean(common) != filepath.Clean(gitDir)
 	c.Identity = "directory:" + filepath.Clean(common)
 	if filepath.Base(common) == ".git" {
@@ -108,6 +101,35 @@ func Resolve(ctx context.Context, dir, defaultBranch string) (Context, error) {
 		return Context{}, err
 	}
 	return c, nil
+}
+
+func readGitDirectories(ctx context.Context, dir string) ([]string, error) {
+	out, err := readGit(ctx, dir, "rev-parse", "--show-toplevel", "--path-format=absolute", "--git-common-dir", "--absolute-git-dir")
+	if err != nil {
+		return nil, err
+	}
+	paths := strings.Split(out, "\n")
+	if len(paths) == 3 && filepath.IsAbs(paths[0]) && filepath.IsAbs(paths[1]) && filepath.IsAbs(paths[2]) {
+		return paths, nil
+	}
+	// Git does not quote path-query output, even with --sq. Newlines in a
+	// directory make batch boundaries ambiguous; single queries retain them.
+	queries := []struct {
+		name string
+		args []string
+	}{
+		{"root", []string{"rev-parse", "--show-toplevel"}},
+		{"common directory", []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}},
+		{"directory", []string{"rev-parse", "--absolute-git-dir"}},
+	}
+	paths = make([]string, len(queries))
+	for i, q := range queries {
+		paths[i], err = readGit(ctx, dir, q.args...)
+		if err != nil {
+			return nil, fmt.Errorf("read Git %s: %w", q.name, err)
+		}
+	}
+	return paths, nil
 }
 
 func readGit(ctx context.Context, dir string, args ...string) (string, error) {
