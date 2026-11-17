@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
@@ -29,6 +30,12 @@ type Options struct {
 type payload struct {
 	State header.State
 	Name  string
+}
+
+// equal reports whether two payloads draw the same header; keep it in step with
+// the fields of payload and header.State.
+func (p payload) equal(q payload) bool {
+	return p.Name == q.Name && p.State.Current == q.State.Current && slices.Equal(p.State.Trail, q.State.Trail)
 }
 
 // Run preserves child arguments and exit status and joins all owned workers.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"slices"
 	"sync"
 
 	watcher "github.com/alexgorbatchev/agent-watcher"
@@ -43,7 +42,7 @@ func (o *observer) handle(ctx context.Context, e watcher.Event, ack func()) (err
 	p := payload{State: next, Name: o.name}
 	// The tracker advances even when delivery fails; compare with the last
 	// accepted payload so redelivery still publishes that context change.
-	if o.delivered != nil && p.Name == o.delivered.Name && p.State.Current == o.delivered.State.Current && slices.Equal(p.State.Trail, o.delivered.State.Trail) {
+	if o.delivered != nil && p.equal(*o.delivered) {
 		return nil
 	}
 	if err := o.app.InvalidateHeader(p); err != nil {
