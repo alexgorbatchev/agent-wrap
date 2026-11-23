@@ -60,10 +60,10 @@ func TestScopedProcessDiscovery(t *testing.T) {
 	if _, ok := s.Process(cmd.Process.Pid); !ok {
 		t.Fatal("child process missing")
 	}
-	if len(s.PiProcesses()) != 0 || len(s.CodexProcesses()) != 0 || len(s.OpencodeProcesses()) != 0 {
+	if len(s.PiProcesses()) != 0 || len(s.CodexProcesses()) != 0 || len(s.OpencodeProcesses()) != 0 || len(s.AgyProcesses()) != 0 {
 		t.Fatal("sleep classified as agent")
 	}
-	for _, harness := range []watcher.Harness{watcher.HarnessPi, watcher.HarnessCodex, watcher.HarnessOpencode} {
+	for _, harness := range []watcher.Harness{watcher.HarnessPi, watcher.HarnessCodex, watcher.HarnessOpencode, watcher.HarnessAgy} {
 		s, err := ScopedProvider(cmd.Process.Pid, harness).GetSnapshot(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -84,6 +84,12 @@ func TestScopedProcessDiscovery(t *testing.T) {
 			pid, cwd, started = procs[0].PID, procs[0].CWD, procs[0].CreateTime
 		case watcher.HarnessOpencode:
 			procs := s.OpencodeProcesses()
+			if len(procs) != 1 {
+				t.Fatal(procs)
+			}
+			pid, cwd, started = procs[0].PID, procs[0].CWD, procs[0].CreateTime
+		case watcher.HarnessAgy:
+			procs := s.AgyProcesses()
 			if len(procs) != 1 {
 				t.Fatal(procs)
 			}

@@ -24,6 +24,9 @@ func TestReportedDirectory(t *testing.T) {
 		{"read", map[string]interface{}{"file_path": "src/missing.go"}, sub},
 		{"pi", map[string]interface{}{"path": "src/file.ts"}, sub},
 		{"opencode", map[string]interface{}{"filePath": filepath.Join(sub, "file.go")}, sub},
+		{"agy AbsolutePath", map[string]interface{}{"AbsolutePath": filepath.Join(sub, "file.go")}, sub},
+		{"agy TargetFile", map[string]interface{}{"TargetFile": "src/file.go"}, sub},
+		{"agy Cwd", map[string]interface{}{"Cwd": sub}, sub},
 		{"search", map[string]interface{}{"path": "src"}, sub},
 		{"no target", map[string]interface{}{"query": "hello"}, base},
 		{"invalid directory", map[string]interface{}{"workdir": "missing"}, base},
@@ -72,10 +75,13 @@ func TestReportedDirectory(t *testing.T) {
 }
 
 func TestHarnessSelection(t *testing.T) {
-	for _, name := range []string{"claude", "pi", "codex", "opencode"} {
+	for _, name := range []string{"claude", "pi", "codex", "opencode", "agy", "antigravity"} {
 		if _, err := Harness("/bin/"+name, ""); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if got, err := Harness("/bin/my-agent", "antigravity"); err != nil || got != watcher.HarnessAgy {
+		t.Fatal(got, err)
 	}
 	if got, err := Harness("/bin/my-agent", "pi"); err != nil || got != watcher.HarnessPi {
 		t.Fatal(got, err)

@@ -30,7 +30,7 @@ func ScopedProvider(leader int, harness watcher.Harness) scanner.ProcessSnapshot
 			return nil, err
 		}
 		scoped := scopedSnapshot{snapshot: s, leader: leader, harness: harness}
-		if harness == watcher.HarnessPi || harness == watcher.HarnessCodex || harness == watcher.HarnessOpencode {
+		if harness == watcher.HarnessPi || harness == watcher.HarnessCodex || harness == watcher.HarnessOpencode || harness == watcher.HarnessAgy {
 			meta, ok := s.Process(leader)
 			if ok && meta.Alive && OwnedPID(leader, leader) {
 				p, err := process.NewProcessWithContext(ctx, int32(leader))
@@ -86,6 +86,13 @@ func (s scopedSnapshot) OpencodeProcesses() []scanner.OpencodeProcessInfo {
 	procs := slices.DeleteFunc(slices.Clone(s.snapshot.OpencodeProcesses()), func(p scanner.OpencodeProcessInfo) bool { return !OwnedPID(p.PID, s.leader) })
 	if s.harness == watcher.HarnessOpencode && s.launch.PID > 0 && !slices.ContainsFunc(procs, func(p scanner.OpencodeProcessInfo) bool { return p.PID == s.launch.PID }) {
 		procs = append(procs, scanner.OpencodeProcessInfo{PID: s.launch.PID, CWD: s.cwd, CreateTime: s.launch.CreateTime})
+	}
+	return procs
+}
+func (s scopedSnapshot) AgyProcesses() []scanner.AgyProcessInfo {
+	procs := slices.DeleteFunc(slices.Clone(s.snapshot.AgyProcesses()), func(p scanner.AgyProcessInfo) bool { return !OwnedPID(p.PID, s.leader) })
+	if s.harness == watcher.HarnessAgy && s.launch.PID > 0 && !slices.ContainsFunc(procs, func(p scanner.AgyProcessInfo) bool { return p.PID == s.launch.PID }) {
+		procs = append(procs, scanner.AgyProcessInfo{PID: s.launch.PID, CWD: s.cwd, CreateTime: s.launch.CreateTime})
 	}
 	return procs
 }

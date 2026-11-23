@@ -44,7 +44,7 @@ func newRootCommand() (*cobra.Command, error) {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&opts.Harness, "harness", "", "Agent family for an alias: claude-code, pi, codex, or opencode")
+	f.StringVar(&opts.Harness, "harness", "", "Agent family for an alias: claude-code, pi, codex, opencode, or agy")
 	f.StringVar(&opts.Directory, "dir", "", "Launch directory (default: current directory)")
 	f.StringVar(&opts.DefaultBranch, "default-branch", "", "Default branch when local origin/HEAD is unavailable")
 	f.StringVar(&opts.Name, "name", "", "Agent label (default: the detected agent name)")

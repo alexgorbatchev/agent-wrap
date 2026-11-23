@@ -87,6 +87,18 @@ CREATE TABLE part (id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,time_crea
 		if _, err := db.Exec("INSERT INTO session (id,directory,title,version,time_created,time_updated) VALUES (?,?,?,?,?,?)", id, base, "Task", "test", now.UnixMilli(), now.UnixMilli()); err != nil {
 			t.Fatal(err)
 		}
+	case "agy":
+		brainDir := os.Getenv("AGY_SESSIONS_DIR")
+		path = filepath.Join(brainDir, id, ".system_generated", "logs", "transcript_full.jsonl")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		convDir := filepath.Join(filepath.Dir(brainDir), "conversations")
+		if err := os.MkdirAll(convDir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		writeRecord(t, filepath.Join(convDir, id+".meta"), map[string]interface{}{"cwd": base})
+		writeRecord(t, path, map[string]interface{}{"step_index": 0, "type": "USER_INPUT", "created_at": now.Format(time.RFC3339Nano), "content": "start"})
 	}
 	if _, err := fmt.Fprint(os.Stdout, "\x1b[2J\x1b[HFRAME CHILD ONLINE"); err != nil {
 		t.Fatal(err)
@@ -134,6 +146,17 @@ CREATE TABLE part (id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,time_crea
 			if _, err := db.Exec("INSERT INTO part VALUES (?,?,?,?,?)", call, call, id, stamp.UnixMilli(), string(part)); err != nil {
 				t.Fatal(err)
 			}
+		case "agy":
+			writeRecord(t, path, map[string]interface{}{
+				"step_index": index,
+				"type":       "PLANNER_RESPONSE",
+				"created_at": stamp.Format(time.RFC3339Nano),
+				"tool_calls": []interface{}{map[string]interface{}{
+					"id":   call,
+					"name": "view_file",
+					"args": map[string]interface{}{"AbsolutePath": filepath.Join(dir, "target.go")},
+				}},
+			})
 		}
 		if _, err := fmt.Fprint(os.Stdout, "\x1b[2J\x1b[HCHILD UPDATED"); err != nil {
 			t.Fatal(err)

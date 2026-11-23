@@ -101,12 +101,16 @@ func agentPIDs(s scanner.ProcessSnapshot, harness watcher.Harness) []int {
 		for _, p := range s.OpencodeProcesses() {
 			pids = append(pids, p.PID)
 		}
+	case watcher.HarnessAgy:
+		for _, p := range s.AgyProcesses() {
+			pids = append(pids, p.PID)
+		}
 	}
 	return pids
 }
 
 func TestDeclaredHarnessPreservesNativeDiscovery(t *testing.T) {
-	for _, harness := range []watcher.Harness{watcher.HarnessPi, watcher.HarnessCodex, watcher.HarnessOpencode} {
+	for _, harness := range []watcher.Harness{watcher.HarnessPi, watcher.HarnessCodex, watcher.HarnessOpencode, watcher.HarnessAgy} {
 		t.Run(string(harness), func(t *testing.T) {
 			executable := agentExecutable(t, harness)
 			leader, outsider := startAgent(t, executable), startAgent(t, executable)

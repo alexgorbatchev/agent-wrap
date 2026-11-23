@@ -25,8 +25,10 @@ func Harness(executable, override string) (watcher.Harness, error) {
 		return watcher.HarnessCodex, nil
 	case "opencode":
 		return watcher.HarnessOpencode, nil
+	case "agy", "antigravity":
+		return watcher.HarnessAgy, nil
 	default:
-		return "", fmt.Errorf("unknown agent %q; select --harness claude-code, pi, codex, or opencode", name)
+		return "", fmt.Errorf("unknown agent %q; select --harness claude-code, pi, codex, opencode, or agy", name)
 	}
 }
 
@@ -46,14 +48,14 @@ func Directory(e watcher.Event, previous string) string {
 	if base == "" {
 		base = previous
 	}
-	for _, key := range []string{"workdir", "cwd"} {
+	for _, key := range []string{"workdir", "cwd", "Cwd", "WorkingDirectory", "working_dir", "workingDir"} {
 		if path, ok := e.Data.ToolInput[key].(string); ok {
 			if dir := existingDirectory(path, base, false); dir != "" {
 				return dir
 			}
 		}
 	}
-	for _, key := range []string{"file_path", "filePath", "notebook_path", "path"} {
+	for _, key := range []string{"file_path", "filePath", "notebook_path", "path", "Path", "TargetFile", "target_file", "AbsolutePath", "absolute_path"} {
 		if path, ok := e.Data.ToolInput[key].(string); ok {
 			if dir := existingDirectory(path, base, true); dir != "" {
 				return dir

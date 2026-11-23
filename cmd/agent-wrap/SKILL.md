@@ -20,15 +20,15 @@ either mode. Human errors use [ERROR].
 
 Put the agent executable and every child argument after --. Child arguments
 pass unchanged, without shell interpretation. Supported executable names are
-claude, claude-code, pi, codex, and opencode; select --harness for aliases or
+claude, claude-code, pi, codex, opencode, agy, and antigravity; select --harness for aliases or
 interpreter launch commands. Run without arguments to print help.
 
 | Flag | Short | Type | Default | Behavior |
 | --- | --- | --- | --- | --- |
-| `--harness` | — | `string` | `""` | Infer from executable; override with claude-code, pi, codex, opencode. |
+| `--harness` | — | `string` | `""` | Infer from executable; override with claude-code, pi, codex, opencode, agy (alias antigravity). |
 | `--dir` | — | `string` | `""` | Launch in current directory unless explicitly supplied. |
 | `--default-branch` | — | `string` | `""` | Use local origin/HEAD; supply the branch if unavailable. |
-| `--name` | — | `string` | `""` | Use Claude Code, Pi, Codex, or OpenCode unless supplied. |
+| `--name` | — | `string` | `""` | Use Claude Code, Pi, Codex, OpenCode, or Antigravity unless supplied. |
 | `--log-file` | — | `string` | `""` | Unique session log under XDG state unless supplied. |
 | `--scan-interval` | — | `duration` | `2s` | Discovery/poll interval; nonpositive values select watcher's 2s default. |
 | `--help` | `-h` | `bool` | `false` | Print help. |
@@ -102,10 +102,10 @@ Git metadata is refreshed on reported tool activity, including tool results.
 Configure discovery through inherited environment variables:
 CLAUDE_SESSIONS_DIR, CLAUDE_PROJECTS_DIR, PI_SESSIONS_DIR,
 PI_CODING_AGENT_DIR, CODEX_SESSIONS_DIR, CODEX_HOME, OPENCODE_DB_PATH,
-and XDG_DATA_HOME. Explicit harness paths use the watcher's standard precedence.
+XDG_DATA_HOME, AGY_SESSIONS_DIR, and GEMINI_HOME. Explicit harness paths use the watcher's standard precedence.
 The AGENT_STATUS_TEST_MOCK_PROC variable is reserved by the watcher for tests.
 
-Session association for Pi, Codex, and OpenCode uses directory/start-time
+Session association for Pi, Codex, OpenCode, and Antigravity uses directory/start-time
 heuristics. Concurrent sessions in the same directory can be ambiguous;
 Claude Code uses its PID descriptor.
 
@@ -166,6 +166,7 @@ agent-wrap -- claude
 agent-wrap -- codex
 agent-wrap -- pi
 agent-wrap -- opencode
+agent-wrap -- agy
 agent-wrap --harness pi -- node ./pi.mjs
 agent-wrap --default-branch trunk --name reviewer -- claude
 ```

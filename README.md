@@ -1,4 +1,4 @@
-`agent-wrap` gives each AI coding agent a three-row terminal header so you can recognize its project, branch, and working directory at a glance. It wraps Claude Code, Pi, Codex, and OpenCode independently of the agent-status services.
+`agent-wrap` gives each AI coding agent a three-row terminal header so you can recognize its project, branch, and working directory at a glance. It wraps Claude Code, Pi, Codex, OpenCode, and Antigravity (`agy`) independently of the agent-status services.
 
 # What It Does
 
@@ -20,7 +20,7 @@
 - Normalize the origin URL so SSH and HTTPS clones share an identity. Repositories without an origin use their local directory; directories outside Git use their own path.
 - Read local Git metadata on tool activity without contacting a remote. Use `--default-branch` if the repository lacks a local `origin/HEAD`; the header labels an unknown default branch and uses a context color.
 - Observe harness storage read-only and restrict events to the launched process session. Explicit `workdir`/`cwd` and file/search targets determine the working context; relative targets use the reported session directory.
-- Pi, Codex, and OpenCode session matching uses the watcher's directory/start-time heuristics. Concurrent sessions in the same directory can be ambiguous; Claude Code has a PID descriptor.
+- Pi, Codex, OpenCode, and Antigravity session matching uses the watcher's directory/start-time heuristics. Concurrent sessions in the same directory can be ambiguous; Claude Code has a PID descriptor.
 - Create separate watcher state under `${XDG_CACHE_HOME:-the OS user cache}/agent-wrap/session-*` and remove it on shutdown. Startup removes orphan cache directories last modified more than 14 days ago, preserving fresh caches and caches owned by live wrappers.
 - Keep logs under `${XDG_STATE_HOME:-~/.local/state}/agent-wrap/`, with 10 MB rotation, five backups per log, 14-day backup retention, and compression. Startup with the default log destination removes prior session logs and rotations last modified more than 14 days ago; live wrappers' logs remain, even when idle or explicitly selected with `--log-file`. An explicit `--log-file` skips this cross-session log cleanup.
 - Use `--log-file` to choose a log destination. Context-resolution errors appear in that log while the header keeps its last valid context.
@@ -35,7 +35,7 @@ This utility is under development; this repository has no published releases. Th
 
 - Use an interactive Linux or macOS terminal with an inactive alternate screen when starting the wrapper.
 - Install [Git](https://git-scm.com/) on `PATH` to identify repositories, and install the agent you want to launch.
-- Inherit the agent's normal storage settings. Discovery supports `CLAUDE_SESSIONS_DIR`, `CLAUDE_PROJECTS_DIR`, `PI_SESSIONS_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_SESSIONS_DIR`, `CODEX_HOME`, `OPENCODE_DB_PATH`, and `XDG_DATA_HOME`.
+- Inherit the agent's normal storage settings. Discovery supports `CLAUDE_SESSIONS_DIR`, `CLAUDE_PROJECTS_DIR`, `PI_SESSIONS_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_SESSIONS_DIR`, `CODEX_HOME`, `OPENCODE_DB_PATH`, `XDG_DATA_HOME`, `AGY_SESSIONS_DIR`, and `GEMINI_HOME`.
 
 # Quick Start
 
@@ -44,6 +44,7 @@ agent-wrap -- claude
 agent-wrap -- codex
 agent-wrap -- pi
 agent-wrap -- opencode
+agent-wrap -- agy
 agent-wrap --name reviewer --default-branch trunk -- claude
 AGENT=1 agent-wrap skill
 ```
@@ -60,7 +61,7 @@ main
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--harness <name>` | — | `""` | Infer from executable; override with `claude-code`, `pi`, `codex`, or `opencode`. |
+| `--harness <name>` | — | `""` | Infer from executable; override with `claude-code`, `pi`, `codex`, `opencode`, or `agy` (`antigravity`). |
 | `--dir <path>` | — | `""` | Launch in the current directory unless supplied. |
 | `--default-branch <branch>` | — | `""` | Read local `origin/HEAD`; supply the default branch when unavailable. |
 | `--name <label>` | — | `""` | Use the detected agent name unless supplied. |

@@ -1,6 +1,6 @@
 # agent-wrap
 
-Standalone terminal wrapper for the Claude Code, Pi, Codex, and OpenCode harnesses supported by `agent-watcher`.
+Standalone terminal wrapper for the Claude Code, Pi, Codex, OpenCode, and Antigravity (`agy`) harnesses supported by `agent-watcher`.
 
 ## Requirements
 

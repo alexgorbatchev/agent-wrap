@@ -59,6 +59,12 @@ func fixtureEnvironment(t *testing.T, harness string) string {
 		t.Setenv(key, dir)
 	}
 	t.Setenv("OPENCODE_DB_PATH", filepath.Join(root, "opencode.db"))
+	agyBrain := filepath.Join(root, "antigravity-data", "brain")
+	if err := os.MkdirAll(agyBrain, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGY_SESSIONS_DIR", agyBrain)
+	t.Setenv("GEMINI_HOME", filepath.Join(root, "gemini-home"))
 	t.Setenv("WRAP_TEST_CHILD", "1")
 	t.Setenv("WRAP_TEST_HARNESS", harness)
 	executable, err := os.Executable()
@@ -77,7 +83,7 @@ func fixtureEnvironment(t *testing.T, harness string) string {
 }
 
 func TestRunAllHarnesses(t *testing.T) {
-	for _, harness := range []string{"claude-code", "pi", "codex", "opencode"} {
+	for _, harness := range []string{"claude-code", "pi", "codex", "opencode", "agy"} {
 		for _, alias := range []bool{false, true} {
 			name := harness
 			if alias {

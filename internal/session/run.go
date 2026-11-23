@@ -136,6 +136,10 @@ func displayName(h watcher.Harness) string {
 		return "Pi"
 	case watcher.HarnessCodex:
 		return "Codex"
+	case watcher.HarnessAgy:
+		return "Antigravity"
+	case watcher.HarnessOpencode:
+		return "OpenCode"
 	default:
 		return "OpenCode"
 	}
