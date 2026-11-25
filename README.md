@@ -1,7 +1,5 @@
 `agent-wrap` keeps the active project, path, and Git branch visible above a coding agent's terminal. It follows Claude Code, Pi, Codex, OpenCode, and Antigravity activity as the agent moves between projects.
 
-The Go implementation is deprecated. See the [`go-legacy` branch](https://github.com/alexgorbatchev/agent-wrap/tree/go-legacy) for its source.
-
 # What It Does
 
 - **Follow working context:** Update a three-row header from reported directories and file targets.
