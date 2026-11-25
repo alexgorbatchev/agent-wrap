@@ -24,18 +24,17 @@ pub fn harness(executable: &OsStr, explicit: &str) -> Result<Harness> {
         "pi" => Ok(Harness::Pi),
         "codex" => Ok(Harness::Codex),
         "opencode" => Ok(Harness::Opencode),
+        "agy" | "antigravity" => Ok(Harness::Agy),
         other => Err(Error::Invalid(format!(
-            "unknown agent {other:?}; select --harness claude-code, pi, codex, or opencode"
+            "unknown agent {other:?}; select --harness claude-code, pi, codex, opencode, or agy"
         ))),
     }
 }
 pub fn is_tool(event: &Event) -> bool {
-    event.parsed.event_type
-        == if event.harness == Harness::Opencode {
-            "tool_use"
-        } else {
-            "tool_call"
-        }
+    matches!(
+        event.parsed.event_type.as_str(),
+        "tool_call" | "file_modification"
+    )
 }
 fn existing(path: &str, base: &Path, file: bool) -> Option<PathBuf> {
     if path.is_empty() || path.contains(['\0', '\r', '\n']) || path.contains("://") {
@@ -62,9 +61,29 @@ pub fn directory(event: &Event, previous: &Path) -> PathBuf {
     };
     if let Some(input) = &event.parsed.data.tool_input {
         for (keys, file) in [
-            (&["workdir", "cwd"][..], false),
             (
-                &["file_path", "filePath", "notebook_path", "path"][..],
+                &[
+                    "workdir",
+                    "cwd",
+                    "Cwd",
+                    "WorkingDirectory",
+                    "working_dir",
+                    "workingDir",
+                ][..],
+                false,
+            ),
+            (
+                &[
+                    "file_path",
+                    "filePath",
+                    "notebook_path",
+                    "path",
+                    "Path",
+                    "TargetFile",
+                    "target_file",
+                    "AbsolutePath",
+                    "absolute_path",
+                ][..],
                 true,
             ),
         ] {
@@ -96,13 +115,8 @@ pub struct ScopedProvider {
 }
 impl SnapshotProvider for ScopedProvider {
     fn snapshot(&self, cancel: &CancellationToken) -> io::Result<ProcessSnapshot> {
-        let captured = ProcessSnapshot::capture(cancel)?;
-        let mut result = ProcessSnapshot::from_processes(
-            captured
-                .processes()
-                .filter(|p| owned_pid(p.pid, self.leader))
-                .cloned(),
-        );
+        let mut result =
+            ProcessSnapshot::capture_filtered(cancel, |pid| owned_pid(pid, self.leader))?;
         if self.harness != Harness::ClaudeCode
             && let Some(process) = result.process(self.leader).filter(|p| p.alive)
         {

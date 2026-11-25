@@ -4,7 +4,7 @@ use std::{collections::HashMap, io, path::PathBuf};
 use tokio_util::sync::CancellationToken;
 use tui_frame::frame::{Controller, Edge};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Payload {
     pub state: State,
     pub name: String,
@@ -77,8 +77,26 @@ pub struct Observer {
     pub tracker: Tracker,
     pub controller: Controller<Payload>,
     pub name: String,
+    delivered: Option<Payload>,
 }
 impl Observer {
+    pub fn new(
+        leader: i32,
+        since: i64,
+        tracker: Tracker,
+        controller: Controller<Payload>,
+        name: String,
+    ) -> Self {
+        Self {
+            leader,
+            since,
+            tracker,
+            controller,
+            name,
+            delivered: None,
+        }
+    }
+
     pub fn handle(
         &mut self,
         cancel: &CancellationToken,
@@ -88,16 +106,15 @@ impl Observer {
         if activity::owned_pid(event.pid, self.leader) && event.parsed.timestamp >= self.since {
             match self.tracker.apply(cancel, event) {
                 Ok((state, _)) => {
-                    match self.controller.invalidate(
-                        Edge::Header,
-                        Payload {
-                            state,
-                            name: self.name.clone(),
-                        },
-                    ) {
-                        Ok(()) | Err(tui_frame::Error::SessionClosed) => {}
-                        Err(error) => return Err(io::Error::other(error)),
-                    }
+                    let payload = Payload {
+                        state,
+                        name: self.name.clone(),
+                    };
+                    // The tracker advances on a delivery failure. Keep the last
+                    // accepted payload so the same event can retry publication.
+                    deliver(&mut self.delivered, payload, |payload| {
+                        self.controller.invalidate(Edge::Header, payload)
+                    })?;
                 }
                 Err(error) => tracing::warn!(err=%error,"context_resolution_failed"),
             }
@@ -106,5 +123,51 @@ impl Observer {
             ack.acknowledge()?;
         }
         Ok(())
+    }
+}
+
+fn deliver(
+    delivered: &mut Option<Payload>,
+    payload: Payload,
+    invalidate: impl FnOnce(Payload) -> tui_frame::Result<()>,
+) -> io::Result<()> {
+    if delivered.as_ref() == Some(&payload) {
+        return Ok(());
+    }
+    match invalidate(payload.clone()) {
+        Ok(()) => *delivered = Some(payload),
+        Err(tui_frame::Error::SessionClosed) => {}
+        Err(error) => return Err(io::Error::other(error)),
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn duplicate_headers_are_skipped_and_failed_updates_retry() {
+        let payload = Payload {
+            state: State::new(project::Context::default()),
+            name: "Test".into(),
+        };
+        let mut delivered = None;
+        deliver(&mut delivered, payload.clone(), |_| Ok(())).unwrap();
+        deliver(&mut delivered, payload.clone(), |_| {
+            panic!("duplicate invalidation")
+        })
+        .unwrap();
+        let mut changed = payload.clone();
+        changed.state.current.branch = "next".into();
+        assert!(
+            deliver(&mut delivered, changed.clone(), |_| {
+                Err(tui_frame::Error::RegionNotConfigured)
+            })
+            .is_err()
+        );
+        assert_eq!(delivered.as_ref(), Some(&payload));
+        deliver(&mut delivered, changed.clone(), |_| Ok(())).unwrap();
+        assert_eq!(delivered.as_ref(), Some(&changed));
     }
 }

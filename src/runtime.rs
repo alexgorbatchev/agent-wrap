@@ -83,6 +83,7 @@ pub fn display_name(harness: Harness) -> &'static str {
         Harness::Pi => "Pi",
         Harness::Codex => "Codex",
         Harness::Opencode => "OpenCode",
+        Harness::Agy => "Antigravity",
     }
 }
 pub fn run(
@@ -212,13 +213,13 @@ fn run_owned(
             };
             config.process_snapshot_provider =
                 Arc::new(activity::ScopedProvider { leader, harness });
-            let observer = Arc::new(Mutex::new(Observer {
+            let observer = Arc::new(Mutex::new(Observer::new(
                 leader,
                 since,
-                tracker: Tracker::new(state, options.default_branch, since),
+                Tracker::new(state, options.default_branch, since),
                 controller,
                 name,
-            }));
+            )));
             let handler: Handler = Arc::new(move |cancel, event, ack| {
                 let observer = observer.clone();
                 let cancel = cancel.clone();

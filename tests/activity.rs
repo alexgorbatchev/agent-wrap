@@ -1,4 +1,4 @@
-use agent_parser::{EventData, ParsedEvent};
+use agent_parser::{EventData, FileModification, ParsedEvent};
 use agent_watcher::{Event, Harness, scanner::SnapshotProvider};
 use agent_wrap::activity;
 use std::{
@@ -38,12 +38,38 @@ fn directory_activity_uses_explicit_targets_without_executing_shell_commands() {
         serde_json::json!({"workdir":"child","file_path":"new"}),
     );
     assert_eq!(activity::directory(&e, &base), base.join("child"));
-    for key in ["file_path", "filePath", "notebook_path", "path"] {
+    for key in [
+        "file_path",
+        "filePath",
+        "notebook_path",
+        "path",
+        "Path",
+        "TargetFile",
+        "target_file",
+        "AbsolutePath",
+        "absolute_path",
+    ] {
         let e = event(
-            Harness::Codex,
+            Harness::Agy,
             "tool_call",
             &base,
             serde_json::json!({key:"child/new.txt"}),
+        );
+        assert_eq!(activity::directory(&e, &base), base.join("child"));
+    }
+    for key in [
+        "workdir",
+        "cwd",
+        "Cwd",
+        "WorkingDirectory",
+        "working_dir",
+        "workingDir",
+    ] {
+        let e = event(
+            Harness::Agy,
+            "tool_call",
+            &base,
+            serde_json::json!({key:"child"}),
         );
         assert_eq!(activity::directory(&e, &base), base.join("child"));
     }
@@ -56,13 +82,27 @@ fn directory_activity_uses_explicit_targets_without_executing_shell_commands() {
         );
         assert_eq!(activity::directory(&e, &base), base);
     }
-    let e = event(
+    let mut e = event(
         Harness::Opencode,
-        "tool_use",
+        "tool_call",
         &base,
         serde_json::json!({"cwd":"child"}),
     );
     assert_eq!(activity::directory(&e, &base), base.join("child"));
+    e.parsed.event_type = "tool_use".into();
+    assert_eq!(activity::directory(&e, &base), base);
+    let mut patch = event(
+        Harness::Codex,
+        "file_modification",
+        &base,
+        serde_json::Value::Null,
+    );
+    patch.parsed.data.file_modification = Some(FileModification {
+        action: "EDIT".into(),
+        file_path: "child/patch.rs".into(),
+        ..Default::default()
+    });
+    assert_eq!(activity::directory(&patch, &base), base.join("child"));
     let e = event(
         Harness::Pi,
         "assistant_message",
@@ -89,6 +129,14 @@ fn directory_activity_uses_explicit_targets_without_executing_shell_commands() {
         Harness::Codex
     );
     assert!(activity::harness(std::ffi::OsStr::new("unknown"), "").is_err());
+    assert_eq!(
+        activity::harness(std::ffi::OsStr::new("/opt/antigravity"), "").unwrap(),
+        Harness::Agy
+    );
+    assert_eq!(
+        activity::harness(std::ffi::OsStr::new("alias"), "agy").unwrap(),
+        Harness::Agy
+    );
 }
 struct OwnedChild(Child);
 impl Drop for OwnedChild {
@@ -119,6 +167,7 @@ fn real_process_scope_excludes_outsiders_and_declares_alias_without_forging_meta
         Harness::Pi,
         Harness::Codex,
         Harness::Opencode,
+        Harness::Agy,
         Harness::ClaudeCode,
     ] {
         let provider = activity::ScopedProvider {
@@ -140,6 +189,9 @@ fn real_process_scope_excludes_outsiders_and_declares_alias_without_forging_meta
         }
         if harness == Harness::Opencode {
             assert_eq!(snapshot.opencode_processes()[0].pid, pid);
+        }
+        if harness == Harness::Agy {
+            assert_eq!(snapshot.agy_processes()[0].pid, pid);
         }
     }
     let cancel = CancellationToken::new();

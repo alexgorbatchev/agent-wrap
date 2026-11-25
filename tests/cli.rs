@@ -77,6 +77,13 @@ fn offline_metadata_help_validation_and_literal_child_arguments() {
                 assert!(!text.starts_with("ALERT:"));
             }
         }
+        out.clear();
+        cli::run(["agent-wrap", "--help"], mode, &mut out).unwrap();
+        let help = String::from_utf8_lossy(&out);
+        assert!(
+            help.contains("agy") && help.contains("antigravity"),
+            "{help}"
+        );
     }
     for args in [
         vec!["agent-wrap", "pi"],

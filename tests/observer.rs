@@ -25,13 +25,13 @@ fn delivery_acknowledges_only_accepted_or_deliberately_skipped_events() {
             name: "Pi".into(),
         },
     );
-    let mut observer = Observer {
-        leader: unsafe { libc::getsid(0) },
-        since: 1,
-        tracker: Tracker::new(state, "".into(), 1),
-        controller: frame.controller(),
-        name: "Pi".into(),
-    };
+    let mut observer = Observer::new(
+        unsafe { libc::getsid(0) },
+        1,
+        Tracker::new(state, "".into(), 1),
+        frame.controller(),
+        "Pi".into(),
+    );
     let acked = Arc::new(AtomicUsize::new(0));
     let counter = acked.clone();
     let ack = Acknowledgement::new(move || {

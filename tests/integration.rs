@@ -4,7 +4,10 @@ use std::{
     io::{BufRead, Write},
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
-        unix::fs::symlink,
+        unix::{
+            fs::{PermissionsExt, symlink},
+            process::CommandExt,
+        },
     },
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -61,6 +64,19 @@ fn fixture_child() {
             &path,
             json!({"type":"session_meta","timestamp":now,"payload":{"id":ID,"cwd":base,"source":"cli","cli_version":"fixture"}}),
         ),
+        "agy" => {
+            let brain = PathBuf::from(std::env::var_os("AGY_SESSIONS_DIR").unwrap());
+            let conversations = brain.parent().unwrap().join("conversations");
+            fs::create_dir_all(&conversations).unwrap();
+            append(
+                &conversations.join(format!("{ID}.meta")),
+                json!({"cwd":base}),
+            );
+            append(
+                &path,
+                json!({"type":"USER_INPUT","step_index":0,"created_at":now,"content":"start"}),
+            );
+        }
         "opencode" => {
             let conn =
                 rusqlite::Connection::open(std::env::var_os("OPENCODE_DB_PATH").unwrap()).unwrap();
@@ -92,6 +108,10 @@ fn fixture_child() {
             "codex" => append(
                 &path,
                 json!({"type":"response_item","timestamp":now,"payload":{"type":"function_call","name":"exec_command","call_id":call,"arguments":json!({"cmd":"pwd","workdir":dir}).to_string()}}),
+            ),
+            "agy" => append(
+                &path,
+                json!({"type":"PLANNER_RESPONSE","step_index":index + 1,"created_at":now,"tool_calls":[{"id":call,"name":"view_file","args":{"AbsolutePath":format!("{dir}/target.rs")}}]}),
             ),
             "opencode" => {
                 let db = db.as_ref().unwrap();
@@ -275,9 +295,217 @@ fn repo(parent: &Path, name: &str) -> PathBuf {
     }
     dir
 }
+
+fn scratch_fixture() -> (tempfile::TempDir, PathBuf) {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("scripts/with-build-scratch");
+    fs::create_dir(script.parent().unwrap()).unwrap();
+    fs::write(&script, include_str!("../scripts/with-build-scratch")).unwrap();
+    (root, script)
+}
+
 #[test]
-fn all_harnesses_and_aliases_update_live_header_then_join_and_cleanup() {
-    for harness in ["claude-code", "pi", "codex", "opencode"] {
+fn scratch_preserves_exit_codes_and_keeps_files_through_signal_cleanup() {
+    let (root, script) = scratch_fixture();
+    for (signal, status) in [
+        ("", 7),
+        ("HUP", 129),
+        ("INT", 130),
+        ("QUIT", 131),
+        ("TERM", 143),
+    ] {
+        let marker = root.path().join("finished");
+        let output = Command::new("bash")
+            .arg(&script)
+            .args([
+                "bash",
+                "-c",
+                r#"
+                set -eu
+                test "$1" = 'two words'
+                test -d "$TMPDIR"
+                printf '%s\n' "$TMPDIR"
+                finish() {
+                    printf retained > "$TMPDIR/final"
+                    printf finished > "$2"
+                }
+                trap 'finish "$@"; exit 0' TERM
+                if test -n "$3"; then
+                    kill "-$3" "$PPID"
+                    while :; do sleep 0.05; done
+                fi
+                finish "$@"
+                exit 7
+            "#,
+                "fixture",
+                "two words",
+            ])
+            .arg(&marker)
+            .arg(signal)
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(status),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let scratch = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+        assert_eq!(scratch.parent(), Some(root.path().join(".tmp").as_path()));
+        assert!(!scratch.exists());
+        assert_eq!(fs::read_to_string(&marker).unwrap(), "finished");
+        fs::remove_file(&marker).unwrap();
+    }
+}
+
+#[test]
+fn scratch_outlives_an_exited_leaders_build_descendant() {
+    let (root, script) = scratch_fixture();
+    let completion = root.path().join("descendant");
+    let output = Command::new("bash")
+        .arg(script)
+        .args([
+            "bash",
+            "-c",
+            r#"
+                set -eu
+                printf '%s\n' "$TMPDIR"
+                (
+                    sleep 0.3
+                    printf retained > "$TMPDIR/result"
+                    printf finished > "$1"
+                ) &
+                exit 7
+            "#,
+            "fixture",
+        ])
+        .arg(&completion)
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(7),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(completion).unwrap(), "finished");
+    let scratch = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+    assert!(!scratch.exists());
+}
+
+#[test]
+fn scratch_preserves_files_when_process_group_inspection_fails() {
+    let (root, script) = scratch_fixture();
+    let bin = root.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let ps = bin.join("ps");
+    fs::write(&ps, "#!/bin/sh\nexit 7\n").unwrap();
+    fs::set_permissions(ps, fs::Permissions::from_mode(0o700)).unwrap();
+    let mut path = vec![bin];
+    path.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
+    let output = Command::new("bash")
+        .arg(script)
+        .args([
+            "bash",
+            "-c",
+            r#"printf '%s\n' "$TMPDIR"; touch "$TMPDIR/result""#,
+        ])
+        .env("PATH", std::env::join_paths(path).unwrap())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not confirmed stopped; retained"));
+    let scratch = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+    assert_eq!(scratch.parent(), Some(root.path().join(".tmp").as_path()));
+    assert!(scratch.join("result").is_file());
+}
+
+#[test]
+fn scratch_transfers_and_restores_foreground_terminal_ownership() {
+    check_scratch_terminal(false);
+    check_scratch_terminal(true);
+}
+
+fn check_scratch_terminal(interrupted: bool) {
+    let (root, script) = scratch_fixture();
+    let (screen, slave) = Screen::new();
+    let mut outer = Command::new("bash");
+    outer
+        .args([
+            "-c",
+            r#"
+        stty tostop
+        bash "$1" bash -c '
+            set -eu
+            printf "%s\n" "$TMPDIR" > "$1"
+            printf "%s\n" "$$" > "$2"
+            printf "BUILD INPUT READY\n"
+            IFS= read -r value
+            printf "BUILD RECEIVED <%s>\n" "$value"
+            exit 7
+        ' fixture "$2" "$3"
+        printf "RESTORED TERMINAL STATUS %s\n" "$?"
+        IFS= read -r value
+        printf "OUTER RECEIVED <%s>\n" "$value"
+    "#,
+            "terminal",
+        ])
+        .arg(&script)
+        .arg(root.path().join("path"))
+        .arg(root.path().join("build-pid"))
+        .stdin(Stdio::from(slave.try_clone().unwrap()))
+        .stdout(Stdio::from(slave.try_clone().unwrap()))
+        .stderr(Stdio::from(slave));
+    unsafe {
+        outer.pre_exec(|| {
+            if libc::setsid() == -1 || libc::ioctl(libc::STDIN_FILENO, libc::TIOCSCTTY, 0) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = Child(outer.spawn().unwrap());
+    struct BuildGroup<'a>(&'a Path);
+    impl Drop for BuildGroup<'_> {
+        fn drop(&mut self) {
+            if let Ok(value) = fs::read_to_string(self.0)
+                && let Ok(pid) = value.trim().parse::<i32>()
+            {
+                unsafe { libc::kill(-pid, libc::SIGTERM) };
+            }
+        }
+    }
+    let group_file = root.path().join("build-pid");
+    let _group = BuildGroup(&group_file);
+    screen.wait("BUILD INPUT READY");
+    let status = if interrupted {
+        screen.send("\x03");
+        130
+    } else {
+        screen.send("argument with spaces\n");
+        screen.wait("BUILD RECEIVED <argument with spaces>");
+        7
+    };
+    screen.wait(&format!("RESTORED TERMINAL STATUS {status}"));
+    screen.send("after build\n");
+    screen.wait("OUTER RECEIVED <after build>");
+    assert!(child.wait().success());
+    let scratch = fs::read_to_string(root.path().join("path")).unwrap();
+    assert!(!Path::new(scratch.trim()).exists());
+    fs::remove_file(&group_file).unwrap();
+}
+#[test]
+fn existing_harnesses_and_aliases_update_live_header_then_join_and_cleanup() {
+    check_harnesses(&["claude-code", "pi", "codex", "opencode"]);
+}
+
+#[test]
+fn antigravity_and_alias_update_live_header_then_join_and_cleanup() {
+    check_harnesses(&["agy"]);
+}
+
+fn check_harnesses(harnesses: &[&str]) {
+    for &harness in harnesses {
         for alias in [false, true] {
             let tmp = tempfile::tempdir_in(".tmp").unwrap();
             let root = tmp.path().canonicalize().unwrap();
@@ -294,10 +522,18 @@ fn all_harnesses_and_aliases_update_live_header_then_join_and_cleanup() {
             symlink(std::env::current_exe().unwrap(), &executable).unwrap();
             let (screen, slave) = Screen::new();
             let mut command = Command::new(env!("CARGO_BIN_EXE_agent-wrap"));
+            if alias {
+                command.args([
+                    "--harness",
+                    if harness == "agy" {
+                        "antigravity"
+                    } else {
+                        harness
+                    },
+                ]);
+            }
             command
                 .args([
-                    "--harness",
-                    harness,
                     "--dir",
                     first.to_str().unwrap(),
                     "--scan-interval",
@@ -311,6 +547,7 @@ fn all_harnesses_and_aliases_update_live_header_then_join_and_cleanup() {
                 "CLAUDE_PROJECTS_DIR",
                 "PI_SESSIONS_DIR",
                 "CODEX_SESSIONS_DIR",
+                "AGY_SESSIONS_DIR",
                 "XDG_CACHE_HOME",
                 "XDG_STATE_HOME",
                 "XDG_DATA_HOME",
@@ -322,6 +559,7 @@ fn all_harnesses_and_aliases_update_live_header_then_join_and_cleanup() {
             let transcript = match harness {
                 "pi" => root.join("PI_SESSIONS_DIR").join(agent_watcher::scanner::encode_pi_cwd(&first)).join("session.jsonl"),
                 "codex" => root.join("CODEX_SESSIONS_DIR/rollout-2026-10-14T00-00-00-11111111-1111-4111-8111-111111111111.jsonl"),
+                "agy" => root.join("AGY_SESSIONS_DIR").join(ID).join(".system_generated/logs/transcript_full.jsonl"),
                 _ => root.join("transcript.jsonl"),
             };
             command

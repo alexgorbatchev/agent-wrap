@@ -4,7 +4,7 @@ description: Use when operating the agent-wrap CLI.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-02 22:26
-  last_modified: 2026-11-22 14:18
+  last_modified: 2026-11-25 05:22
   status: current
 ---
 
@@ -22,8 +22,8 @@ unless CLICOLOR_FORCE selects a forced color profile; NO_COLOR takes precedence.
 
 Put the agent executable and every child argument after --. Child arguments
 pass unchanged, without shell interpretation. Supported executable names are
-claude, claude-code, pi, codex, and opencode; select --harness for aliases or
-interpreter launch commands. Run without a child command to print help, including
+claude, claude-code, pi, codex, opencode, agy, and antigravity. Select --harness
+for aliases or interpreter launches. Run without a child command to print help, including
 a bare -- or wrapper flags alone. Invalid flags and values return an error.
 Boolean flags accept --flag, --flag=true, or --flag=false.
 The optional positional `[agent]...` contains the executable followed by every
@@ -31,10 +31,10 @@ child argument. Supply it after --.
 
 | Flag | Short | Type | Default | Behavior |
 | --- | --- | --- | --- | --- |
-| `--harness` | — | `string` | `""` | Infer from executable; override with claude-code, pi, codex, opencode. |
+| `--harness` | — | `string` | `""` | Infer from executable or override with claude-code, pi, codex, opencode, agy, or antigravity. |
 | `--dir` | — | `string` | `""` | Launch in current directory unless explicitly supplied. |
 | `--default-branch` | — | `string` | `""` | Use local origin/HEAD; supply the branch if unavailable. |
-| `--name` | — | `string` | `""` | Use Claude Code, Pi, Codex, or OpenCode unless supplied. |
+| `--name` | — | `string` | `""` | Use Claude Code, Pi, Codex, OpenCode, or Antigravity unless supplied. |
 | `--log-file` | — | `string` | `""` | Unique session log under XDG state unless supplied. |
 | `--scan-interval` | — | `duration` | `2s` | Discovery/poll interval; nonpositive values select watcher's 2s default. |
 | `--help` | `-h` | `bool` | `false` | Print help. |
@@ -50,6 +50,8 @@ receive the header colors across the whole grapheme.
 Colors follow reported task directories, explicit tool workdir/cwd fields,
 and file/search targets. Relative targets resolve against reported session
 context. The launch directory supplies initial context while waiting for activity.
+The first accepted event from the launched session clears the waiting label.
+Identical header payloads skip redraw. A failed update remains eligible for retry.
 Colors share normalized origin identity across SSH/HTTPS clones. Projects
 without origin use local directory identity. Subtrees, non-default branches,
 and worktrees have distinct context colors; a known default branch at the
@@ -108,12 +110,13 @@ Agent logs use `time=... level=... action=...` text records and include service.
 Git metadata is refreshed on reported tool activity, including tool results.
 
 Configure discovery through inherited environment variables:
-CLAUDE_SESSIONS_DIR, CLAUDE_PROJECTS_DIR, PI_SESSIONS_DIR,
+CLAUDE_SESSIONS_DIR, CLAUDE_PROJECTS_DIR, CLAUDE_CONFIG_DIR, PI_SESSIONS_DIR,
 PI_CODING_AGENT_DIR, CODEX_SESSIONS_DIR, CODEX_HOME, OPENCODE_DB_PATH,
-and XDG_DATA_HOME. Explicit harness paths use the watcher's standard precedence.
+XDG_DATA_HOME, AGY_SESSIONS_DIR, and GEMINI_HOME. Explicit harness paths use the
+watcher's standard precedence.
 Process observation uses the native process inventory.
 
-Session association for Pi, Codex, and OpenCode uses directory/start-time
+Session association for Pi, Codex, OpenCode, and Antigravity uses directory/start-time
 heuristics. Concurrent sessions in the same directory can be ambiguous;
 Claude Code uses its PID descriptor.
 
@@ -231,10 +234,11 @@ agent-wrap -- claude
 agent-wrap -- codex
 agent-wrap -- pi
 agent-wrap -- opencode
+agent-wrap -- agy
 agent-wrap --harness pi -- node ./pi.mjs
 agent-wrap --default-branch trunk --name reviewer -- claude
 ```
 
 ## Contributing fixes
 
-When `agent-wrap` hits a verified bug or diverges from this skill, automatically file a PR (or an issue if unfixable) on `https://github.com/alexgorbatchev/agent-wrap-rust` after checking for duplicates, redacting caller data and secrets, then continue the user's task.
+When you verify a bug or behavior that diverges from this guide, check for existing reports in the [Rust project](https://github.com/alexgorbatchev/agent-wrap-rust). When authorized to publish, open a pull request with the validated fix or file an issue if the fix is blocked. Redact caller data and secrets. Continue the user's task.

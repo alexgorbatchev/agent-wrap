@@ -57,7 +57,7 @@ pub fn command(mode: Mode) -> Command {
     for (name, help) in [
         (
             "harness",
-            "Agent family for an alias: claude-code, pi, codex, or opencode",
+            "Select claude-code, pi, codex, opencode, agy, or antigravity",
         ),
         ("dir", "Launch directory (default: current directory)"),
         (
@@ -70,7 +70,13 @@ pub fn command(mode: Mode) -> Command {
             "Wrapper log file (default: a unique file under XDG state)",
         ),
     ] {
-        root = root.arg(Arg::new(name).long(name).help(help).default_value(""));
+        root = root.arg(
+            Arg::new(name)
+                .long(name)
+                .help(help)
+                .default_value("")
+                .hide_default_value(true),
+        );
     }
     root = root.arg(
         Arg::new("scan-interval")
@@ -78,7 +84,7 @@ pub fn command(mode: Mode) -> Command {
             .default_value("2s")
             .allow_hyphen_values(true)
             .value_parser(duration)
-            .help("Interval between agent discovery scans; nonpositive selects 2s"),
+            .help("Agent discovery interval (nonpositive uses 2s)"),
     );
     root = root.subcommand(
         Command::new("completion")

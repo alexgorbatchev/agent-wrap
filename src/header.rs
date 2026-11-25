@@ -8,7 +8,7 @@ use ratatui::{
 use sha2::{Digest, Sha256};
 
 pub const ROWS: u16 = 3;
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State {
     pub current: Context,
     pub trail: Vec<Context>,

@@ -11,6 +11,7 @@ Interactive agent terminal with a three-row project header. Parent instructions 
 ## Commands
 
 - Build the local artifact: `just build` (`bin/agent-wrap`).
+- Prepare dependencies and the native terminal library: `just setup`.
 - Run: `just run -- pi`; compact diagnostics: `just run-ai -- pi`.
 - Tests: `just test`; strict format/lint: `just lint`; coverage: `just coverage`.
 - Documentation: `just doc`; complete checks: `just check`.
@@ -18,8 +19,9 @@ Interactive agent terminal with a three-row project header. Parent instructions 
 
 ## Native setup
 
-- External libraries resolve from pinned GitHub revisions in `Cargo.toml`. The `agent-common` dependency requires SSH access to private `agent-status-rust`. The terminal dependency builds its checksum-pinned Ghostty source using its own `scripts/native.sh`; consult [tui-frame prerequisites](https://github.com/alexgorbatchev/tui-frame-rust/blob/main/AGENTS.md) for Zig, libclang, SDK, and build prerequisites.
-- Git on PATH is required for metadata resolution and real subprocess tests. Tests use isolated fixtures under `.tmp/` and real PTYs; they do not require installed agent executables or user transcripts.
+- External libraries resolve from public, pinned GitHub revisions in `Cargo.toml`. The terminal dependency builds its checksum-pinned Ghostty source using its own `scripts/native.sh` and retains its native cache with the Cargo checkout. Consult [tui-frame prerequisites](https://github.com/alexgorbatchev/tui-frame-rust/blob/main/AGENTS.md) for Zig, libclang, SDK, and build prerequisites.
+- Explicit build and lint commands use supervised scratch under `.tmp/`. Bash and core Perl handle foreground terminal ownership and process-group cleanup. Tests inherit the system temporary directory.
+- Git on PATH is required for metadata resolution and real subprocess tests. Tests use isolated fixtures and real PTYs. They can run without installed agents or user transcripts.
 - Preserve upstream licenses and record local native dependency patches in `DEPENDENCIES.md`. Literal log paths use the vendored log4rs native path APIs; never reintroduce environment expansion or lossy path conversion.
 
 ## Runtime contracts
@@ -35,6 +37,6 @@ Interactive agent terminal with a three-row project header. Parent instructions 
 ## Documentation and verification
 
 - `skills/agent-wrap/SKILL.md` is the canonical operational guide and is embedded verbatim by `agent-wrap skill`, preserving this project's source contract. Update it in the same change as any command, argument, flag, default, environment, output, exit, or side-effect change; update `last_modified` and keep the live command-tree drift test passing.
-- Any code change affecting runtime results requires a corresponding test-file change and at least 90% line coverage; `scripts/` is excluded. Use real processes, PTYs and filesystem fixtures for lifecycle and ownership behavior. Temporarily disable the implementation, verify the behavioral test fails, restore it, and rerun checks.
-- Use the `termctrl` skill for interactive terminal smoke checks and keep evidence under `.tmp/`. Native macOS runtime behavior requires macOS execution; Linux tests and cross-compilation alone do not prove it.
+- Any code change affecting runtime results requires a corresponding test change and at least 90% line and function coverage. `just coverage` measures first-party Rust source and excludes scripts and vendored dependencies. Use real processes, PTYs and filesystem fixtures for lifecycle and ownership behavior. Temporarily disable the implementation, verify the behavioral test fails, restore it, and rerun checks.
+- Use the `termctrl` skill for interactive terminal smoke checks. Retain accepted screenshots under `.state/ui-evidence/`. Verify native macOS runtime behavior by running on macOS.
 - Keep standing rules here; keep progress and test-run history in `.tmp/` or conversation. Never publish releases, tags, packages, or production deployments without explicit authorization.
