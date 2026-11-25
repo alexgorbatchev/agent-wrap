@@ -1,75 +1,80 @@
-`agent-wrap` gives each AI coding agent a three-row terminal header so you can recognize its project, branch, and working directory at a glance. It wraps Claude Code, Pi, Codex, OpenCode, and Antigravity (`agy`) independently of the agent-status services.
+`agent-wrap` keeps the active project, path, and Git branch visible above a coding agent's terminal. It follows Claude Code, Pi, Codex, OpenCode, and Antigravity activity as the agent moves between projects.
+
+The Go implementation is deprecated. See the [`go-legacy` branch](https://github.com/alexgorbatchev/agent-wrap/tree/go-legacy) for its source.
 
 # What It Does
 
-- **Project colors:** Give clones of the same Git origin the same deterministic bright background.
-- **Context colors:** Split the header for a subtree, worktree, or non-default branch, keeping a 3×3 project-color block on the left.
-- **Project history:** Keep earlier projects as 3×3 blocks when an agent moves across repositories; returning to a project removes later blocks.
-- **Terminal behavior:** Pass arguments and terminal input to the agent and preserve its exit code.
+- **Follow working context:** Update a three-row header from reported directories and file targets.
+- **Recognize projects:** Share project colors across SSH and HTTPS origins, and distinguish branches, subtrees, and worktrees.
+- **Retain a visual trail:** Keep visited project colors visible and rewind the trail when returning to an earlier project.
+- **Own the terminal lifecycle:** Pass child arguments unchanged, preserve child exit status, restore terminal modes, and remove temporary watcher state.
 
 # How It Works
 
-- Start an agent with `agent-wrap -- <agent> [args...]`.
-- Read the three header rows as agent name, project/path, and branch/worktree.
-- Reported task directories and tool targets update the header as the agent works.
-- A known default branch at the primary repository root fills the header with one project color. Other contexts use a distinct bright color after the project block.
-- Moving A → B → C leaves A and B as blocks and fills the remainder with C. Returning to A reuses its color and clears B and C.
+- Put the agent executable and its arguments after `--`.
+- Invoke it without a child, including a bare `--` or wrapper flags alone, to read help.
+- Read the header as agent label, project/path, and branch/worktree. It starts at the launch directory while waiting for activity.
+- Let the agent work normally. File targets and reported work directories update the header; Git lookup errors preserve the last valid context and go to the wrapper log.
+- Exit the agent normally or cancel the wrapper with SIGINT, SIGTERM, or SIGHUP. The wrapper stops the owned session, joins observation workers, and cleans up its state.
 
 # How it Really Works
 
-- Normalize the origin URL so SSH and HTTPS clones share an identity. Repositories without an origin use their local directory; directories outside Git use their own path.
-- Read local Git metadata on tool activity without contacting a remote. Use `--default-branch` if the repository lacks a local `origin/HEAD`; the header labels an unknown default branch and uses a context color.
-- Observe harness storage read-only and restrict events to the launched process session. Explicit `workdir`/`cwd` and file/search targets determine the working context; relative targets use the reported session directory.
-- Pi, Codex, OpenCode, and Antigravity session matching uses the watcher's directory/start-time heuristics. Concurrent sessions in the same directory can be ambiguous; Claude Code has a PID descriptor.
-- Create separate watcher state under `${XDG_CACHE_HOME:-the OS user cache}/agent-wrap/session-*` and remove it on shutdown. Startup removes orphan cache directories last modified more than 14 days ago, preserving fresh caches and caches owned by live wrappers.
-- Keep logs under `${XDG_STATE_HOME:-~/.local/state}/agent-wrap/`, with 10 MB rotation, five backups per log, 14-day backup retention, and compression. Startup with the default log destination removes prior session logs and rotations last modified more than 14 days ago; live wrappers' logs remain, even when idle or explicitly selected with `--log-file`. An explicit `--log-file` skips this cross-session log cleanup.
-- Use `--log-file` to choose a log destination. Context-resolution errors appear in that log while the header keeps its last valid context.
-- Reserve exactly three rows while keeping the agent interactive. Narrow terminals preserve the original project block when it fits and omit further blocks to leave room for the active color.
-- Return the agent's exit code; signal exits use `128 + signal number`. Wrapper errors return 1 and print to stderr. Help, version, and the usage reference print to stdout. `AGENT=1` selects compact help and diagnostics.
+- The wrapper reads harness session storage and local Git metadata. It does not contact a remote Git server or start a telemetry server. The launched agent keeps its own network behavior.
+- Projects with the same normalized origin share colors. A known default branch at the primary root uses a single project color; branches, worktrees, and subtrees use a distinct context color. Use `--default-branch` when local `origin/HEAD` is unavailable.
+- Claude Code uses its PID descriptor. Pi, Codex, OpenCode, and Antigravity associate sessions using directory and start-time heuristics. Concurrent sessions in the same directory can be ambiguous. Only processes in the owned child session are eligible.
+- Each run writes watcher state under `${XDG_CACHE_HOME:-the OS cache}/agent-wrap/session-*` and removes it on shutdown. Startup prunes unlocked cache directories older than 14 days.
+- Default logs live under `${XDG_STATE_HOME:-~/.local/state}/agent-wrap/session-*.log`. They rotate at 10 MiB into five compressed numbered archives and expire after 14 days. Live session logs are protected by ownership locks. `--log-file` skips cross-session log pruning.
+- Help, skill text, version, and completion scripts use stdout. Errors print once on stderr; working-context diagnostics stay in the log. `AGENT=1`, `true`, or `yes` selects compact help and `ERR:` diagnostics; human errors use `[ERROR]`.
+- A normal child exit preserves its code. A signal-terminated child returns `128 + signal number`; wrapper failures return 1. The terminal remains interactive in either output mode. Header colors follow the terminal's color profile; a nonempty `NO_COLOR` disables them.
+
+# Prerequisites
+
+[Git](https://git-scm.com/) on PATH and an interactive Linux or macOS terminal are required. Install the agent you want to wrap; interpreter launches and aliases use `--harness`.
 
 # Installation
 
-This utility is under development; this repository has no published releases. The local development binary is `bin/agent-wrap`. Development setup is documented in [AGENTS.md](AGENTS.md).
+Download the Linux x86-64 archive from the [latest release](https://github.com/alexgorbatchev/agent-wrap/releases/latest), verify it against `checksums.txt`, and put `agent-wrap` on your `PATH`. The prebuilt binary needs glibc 2.36 or newer.
 
-# Setup
-
-- Use an interactive Linux or macOS terminal with an inactive alternate screen when starting the wrapper.
-- Install [Git](https://git-scm.com/) on `PATH` to identify repositories, and install the agent you want to launch.
-- Inherit the agent's normal storage settings. Discovery supports `CLAUDE_SESSIONS_DIR`, `CLAUDE_PROJECTS_DIR`, `PI_SESSIONS_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_SESSIONS_DIR`, `CODEX_HOME`, `OPENCODE_DB_PATH`, `XDG_DATA_HOME`, `AGY_SESSIONS_DIR`, and `GEMINI_HOME`.
+To build from source on Linux or macOS, install the [native build prerequisites](AGENTS.md#native-setup) and run `just build`. The optimized executable is `bin/agent-wrap`.
 
 # Quick Start
 
 ```sh
-agent-wrap -- claude
-agent-wrap -- codex
 agent-wrap -- pi
+agent-wrap -- codex
+agent-wrap -- claude
 agent-wrap -- opencode
 agent-wrap -- agy
-agent-wrap --name reviewer --default-branch trunk -- claude
+agent-wrap --harness pi -- node ./pi.mjs
+agent-wrap --default-branch trunk --name reviewer -- claude
 AGENT=1 agent-wrap skill
 ```
 
-Sample Output (header text; background colors depend on the project):
+The header sits above the agent's terminal. For a project named `first` on its default branch `trunk`, its text is:
 
 ```text
-Codex
-agent-status · /home/alex/development/projects/agent-status
-main
+Pi · waiting for agent activity
+first · ~/projects/first
+trunk
 ```
 
 # Options & Flags
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--harness <name>` | — | `""` | Infer from executable; override with `claude-code`, `pi`, `codex`, `opencode`, or `agy` (`antigravity`). |
+| `--harness <name>` | — | `""` | Infer from executable or override with `claude-code`, `pi`, `codex`, `opencode`, `agy`, or `antigravity`. |
 | `--dir <path>` | — | `""` | Launch in the current directory unless supplied. |
-| `--default-branch <branch>` | — | `""` | Read local `origin/HEAD`; supply the default branch when unavailable. |
-| `--name <label>` | — | `""` | Use the detected agent name unless supplied. |
-| `--log-file <path>` | — | `""` | Use a unique log under XDG state unless supplied. |
-| `--scan-interval <duration>` | — | `2s` | Discover activity at this interval; nonpositive values select the watcher's default. |
+| `--default-branch <branch>` | — | `""` | Use local origin/HEAD unless unavailable. |
+| `--name <label>` | — | `""` | Use the detected agent's display name unless supplied. |
+| `--log-file <path>` | — | `""` | Use a unique session log unless supplied. |
+| `--scan-interval <duration>` | — | `2s` | Go duration syntax, including Unicode microseconds; nonpositive values select 2s. |
 | `--help` | `-h` | `false` | Print help. |
-| `--version` | `-v` | `false` | Print the raw build version. |
+| `--version` | `-v` | `false` | Print the raw version and newline. |
+
+`agent-wrap completion bash|zsh|fish|powershell` prints shell completion. Each shell command accepts `--no-descriptions` (default `false`). `agent-wrap help [command]` prints command help; `agent-wrap skill` prints the complete embedded reference.
+
+Harness storage follows `CLAUDE_SESSIONS_DIR`, `CLAUDE_PROJECTS_DIR`, `CLAUDE_CONFIG_DIR`, `PI_SESSIONS_DIR`, `PI_CODING_AGENT_DIR`, `CODEX_SESSIONS_DIR`, `CODEX_HOME`, `OPENCODE_DB_PATH`, `XDG_DATA_HOME`, `AGY_SESSIONS_DIR`, and `GEMINI_HOME`. The skill describes precedence and runtime files.
 
 # License
 
-[MIT](LICENSE). Copyright (c) 2026 Alex Gorbatchev.
+[MIT](LICENSE), copyright 2026 Alex Gorbatchev.

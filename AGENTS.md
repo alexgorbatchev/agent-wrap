@@ -1,40 +1,43 @@
+---
+created_on: 2026-10-14 10:04
+last_modified: 2026-10-14 10:04
+status: current
+---
+
 # agent-wrap
 
-Standalone terminal wrapper for the Claude Code, Pi, Codex, OpenCode, and Antigravity (`agy`) harnesses supported by `agent-watcher`.
-
-## Requirements
-
-- Use `github.com/alexgorbatchev/go-tui-frame` directly; reserve exactly three header rows showing agent name, project/path, and branch/worktree.
-- Follow the agent's reported tool/task directories; operate independently of the agent-status daemons. Process directories serve only session discovery and launch context.
-- Calculate deterministic bright project colors from normalized Git remote identity so clones on different machines match. Use directory identity when no remote exists.
-- Give subdirectories, non-default branches, and worktrees distinct bright subcolors. The repository's default branch at its primary root has a solid project background.
-- Keep original project colors as successive 3×3 blocks when moving A → B → C, with the active context filling the remainder. Returning to an earlier project reuses its color and removes the later history blocks.
-- Maintain this utility as its own project with module `github.com/alexgorbatchev/agent-wrap`; keep logging and test tooling inside this project and require no agent-status source checkout.
-- Publish the source to the public GitHub repository `alexgorbatchev/agent-wrap` with a description and repository topics; keep `origin` pointed at that repository.
+Interactive agent terminal with a three-row project header. Parent instructions in `../AGENTS.md` apply.
 
 ## Commands
 
-- Development prerequisites: Go 1.27.1, Zig 0.16.0, Git, `just`, Perl with its core POSIX module, `pkg-config`, `curl`, `tar`, and `shasum`. Perl provides terminal foreground handoff for build commands without a compiled bootstrap helper. The native recipe builds the exact Ghostty source and checksum required by the pinned `go-tui-frame` module under the main checkout's `.cache/native/`; Linux builds use Zig's musl target and static linkage.
-- Lint requires `golangci-lint` built with Go 1.27 or newer (verified with v2.14.0); an older build cannot analyze the workspace toolchain.
-- Always reuse the main checkout's `.cache/native/` for static dependencies, including Ghostty sources, archives, installation prefixes, and Zig caches, from every linked worktree. Resolve the main checkout through Git worktree metadata rather than the current branch name.
-- Use the caller's shared Go build cache. Build tools run through `bash scripts/with-build-scratch`, which owns a unique checkout `.tmp/build.*` directory and a separate process group. Build commands must remain in that group. Remove scratch only after the direct child is reaped and the group is absent; use bounded TERM/KILL shutdown on cancellation or lingering descendants, and retain scratch with an error when shutdown cannot be confirmed. Tests retain native temporary storage and clean up their fixtures. Never export a shared `TMPDIR` or `GOTMPDIR` from the justfile. Binaries stay in each checkout's `bin/`; run recipes build first and launch outside build scratch.
-- The project owns a Go 1.27.1 workspace because the frame requires it; run commands with `just` at the project root.
-- Supported runtime platforms: Linux and macOS; builds and PTY integration tests are verified on the host platform. Windows is unsupported by the terminal-frame dependency.
+- Build the local artifact: `just build` (`bin/agent-wrap`).
+- Prepare dependencies and the native terminal library: `just setup`.
+- Run: `just run -- pi`; compact diagnostics: `just run-ai -- pi`.
+- Tests: `just test`; strict format/lint: `just lint`; coverage: `just coverage`.
+- Documentation: `just doc`; complete checks: `just check`.
+- Format only this package: `cargo fmt --package agent-wrap`.
 
-- Build: `just build` (binary in `bin/agent-wrap`)
-- Run: `just run -- claude` or `just run-ai -- codex`
-- Test: `just test` (race detector and >=90% statement coverage)
-- Lint: `just lint`
-- Check: `just check` (required locally while CI is disabled)
-- Native Git isolation regression: run `just build` then `bash scripts/check-native-isolation.sh` (real tagged, untagged, inherited Git environment, and linked-worktree builds plus Ghostty version/config detection on colon-containing source paths, in an independent scratch clone under `.tmp/`). Both `setup` and `build` compile its supervisor into `bin/native-isolation`; rebuild after changing supervisor source. The supervisor owns a separate native process group, waits for every member to exit before removing scratch, and uses bounded TERM/KILL shutdown on cancellation. Preserve scratch and report failure when shutdown cannot be confirmed; print failing build logs before cleanup. Native commands must stay in that process group.
+## Native setup
 
-## Boundaries
+- External libraries resolve from public, pinned GitHub revisions in `Cargo.toml`. The terminal dependency builds its checksum-pinned Ghostty source using its own `scripts/native.sh` and retains its native cache with the Cargo checkout. Consult [tui-frame prerequisites](https://github.com/alexgorbatchev/tui-frame-rust/blob/main/AGENTS.md) for Zig, libclang, SDK, and build prerequisites.
+- Explicit build and lint commands use supervised scratch under `.tmp/`. Bash and core Perl handle foreground terminal ownership and process-group cleanup. Tests inherit the system temporary directory.
+- Git on PATH is required for metadata resolution and real subprocess tests. Tests use isolated fixtures and real PTYs. They can run without installed agents or user transcripts.
+- Preserve upstream licenses and record local native dependency patches in `DEPENDENCIES.md`. Literal log paths use the vendored log4rs native path APIs; never reintroduce environment expansion or lossy path conversion.
 
-- Keep CI disabled until explicitly authorized to re-enable it. Run `just check` locally and obtain independent review for ticket changes; do not add or enable a workflow as a prerequisite to those changes.
-- Always: update the embedded `cmd/agent-wrap/SKILL.md` in the same change as commands, flags, defaults, environment variables, output, or side effects; maintain interface drift tests.
-- Always: change behavioral tests with runtime changes and verify red/green, including temporarily disabling the implementation; require >=90% statement coverage in every Go package (scripts are excluded).
-- Always: isolate each wrapper's watcher state and restrict events to its child session; join workers on shutdown.
-- Always: use the project's internal structured logging to files while the frame owns terminal I/O.
-- Always: record new user instructions here; check with the user if they conflict.
-- Never: execute reported shell commands, inspect harness authentication files, transmit telemetry, or mutate harness logs/databases.
-- Never: publish releases automatically without explicit authorization.
+## Runtime contracts
+
+- Use Clap for all argument and value parsing. Keep executable and child arguments as native `OsString` values and pass them directly to the PTY command without shell interpretation.
+- Keep the header exactly three rows. Use terminal cell widths, preserve the original color block on narrow screens, and rewind the visited-project trail when returning to an earlier project.
+- Resolve task directories from typed parsed events and existing paths. Never execute shell text reported by an agent. Preserve the last valid context when a Git/path lookup fails, including the last successfully resolved per-session base.
+- Observe only processes in the launched child's native session. Declare alias candidates from captured metadata without changing process names, command lines, or creation times. Keep candidate PID reuse validation in the shared watcher.
+- Use a frame controller in observation callbacks. Cancel and join observation workers before dropping logging or temporary state; keep the console borrowed and let its native owner restore terminal modes.
+- Keep wrapper tracing out of terminal stdout/stderr. Install the shared logging dispatch on all worker and blocking threads; return logging/cleanup failures through the one top-level error printer.
+- Hold advisory ownership locks for the lifetime of temporary state and session-shaped logs. Never prune live owners, follow lock symlinks, or apply cross-session log pruning to an explicit log destination. Keep every watcher checkpoint in the owned session cache.
+
+## Documentation and verification
+
+- `skills/agent-wrap/SKILL.md` is the canonical operational guide and is embedded verbatim by `agent-wrap skill`, preserving this project's source contract. Update it in the same change as any command, argument, flag, default, environment, output, exit, or side-effect change; update `last_modified` and keep the live command-tree drift test passing.
+- Any code change affecting runtime results requires a corresponding test change and at least 90% line and function coverage. `just coverage` measures first-party Rust source and excludes scripts and vendored dependencies. Use real processes, PTYs and filesystem fixtures for lifecycle and ownership behavior. Temporarily disable the implementation, verify the behavioral test fails, restore it, and rerun checks.
+- Use the `termctrl` skill for interactive terminal smoke checks. Retain accepted screenshots under `.state/ui-evidence/`. Verify native macOS runtime behavior by running on macOS.
+- Keep standing rules here; keep progress and test-run history in `.tmp/` or conversation. Never publish releases, tags, packages, or production deployments without explicit authorization.
+- Keep CI disabled until explicitly authorized to enable it. Run `just check` locally and require independent review before integrating ticket changes.
